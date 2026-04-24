@@ -53,6 +53,7 @@ const transactionsRoot = ['transactions'] as const;
 const transfersRoot = ['transfers'] as const;
 const accountsRoot = ['accounts'] as const;
 const budgetsRoot = ['budgets'] as const;
+const statsRoot = ['stats'] as const;
 
 // Variables types — the input schema plus an optional idempotency key that
 // `onMutate` fills in. The key is a transport concern and deliberately not
@@ -121,6 +122,12 @@ function invalidateAfterMutation(
   void qc.invalidateQueries({ queryKey: [...budgetsRoot, 'status'] });
   void qc.invalidateQueries({ queryKey: [...budgetsRoot, 'suggest'] });
   void qc.invalidateQueries({ queryKey: budgetsRoot });
+  // Phase 7: every Stats query derives from transactions, so any transaction
+  // mutation (create / update / delete / restore / transfer) must sweep the
+  // `['stats']` tree. Prefix invalidation covers overview, monthly-trend,
+  // category-breakdown, daily-spend, category-sparkline, and sankey in one
+  // call.
+  void qc.invalidateQueries({ queryKey: statsRoot });
   for (const id of touchedAccountIds) {
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id, 'balance-history'] });
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });

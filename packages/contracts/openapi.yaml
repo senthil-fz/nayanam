@@ -1921,6 +1921,241 @@ paths:
               schema: { $ref: '#/components/schemas/HouseholdSummary' }
         '400': { $ref: '#/components/responses/Error' }
 
+  /stats/overview:
+    get:
+      operationId: getStatsOverview
+      summary: Period summary with deltas and top expense categories
+      description: |
+        Hero data for the Stats screen. Returns income/expense/net totals for the
+        current period, deltas vs the equivalent previous period, and the top
+        expense categories (primary-currency scope). Excludes TRANSFER rows.
+
+        Week semantics: `period=week` is the full Monday→next-Monday UTC window
+        (NOT week-to-date). This diverges from `GET /transactions/period-summary`
+        which returns week-to-date.
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: period
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/StatsPeriodKind' }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`. ISO 8601 UTC. Paired with `to`.
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`. ISO 8601 UTC. Exclusive upper bound.
+        - name: topCategoriesLimit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 8 }
+      responses:
+        '200':
+          description: Overview payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatsOverviewResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /stats/monthly-trend:
+    get:
+      operationId: getStatsMonthlyTrend
+      summary: Monthly income/expense series per currency
+      description: |
+        Returns one series per currency the household has transacted in within
+        the window. Each series has exactly `months` points, oldest→newest,
+        including zero-activity months. Excludes TRANSFER rows. Months are
+        calendar months, UTC.
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: months
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 24, default: 12 }
+        - name: currencyCode
+          in: query
+          required: false
+          schema: { type: string, minLength: 3, maxLength: 3 }
+          description: ISO 4217 code. When omitted, every currency present in the window is returned.
+      responses:
+        '200':
+          description: Monthly trend payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MonthlyTrendResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /stats/category-breakdown:
+    get:
+      operationId: getStatsCategoryBreakdown
+      summary: Category totals for the donut chart
+      description: |
+        Per-currency bucket of category totals for the selected period and type.
+        Items sorted by `amountMinor DESC`. Excludes TRANSFER rows. When
+        `totalMinor=0`, `percentOfTotal` is omitted from items.
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: period
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/StatsPeriodKind' }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`.
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`.
+        - name: type
+          in: query
+          required: false
+          description: Restricted to INCOME or EXPENSE at the service layer (TRANSFER rejected).
+          schema:
+            allOf:
+              - { $ref: '#/components/schemas/TransactionType' }
+            default: EXPENSE
+        - name: currencyCode
+          in: query
+          required: false
+          schema: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: Category breakdown payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryBreakdownResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /stats/daily-spend:
+    get:
+      operationId: getStatsDailySpend
+      summary: Daily expense series for the heatmap
+      description: |
+        EXPENSE-only daily totals for a rolling window. Each currency series has
+        exactly `days` points, oldest→newest, including zero-spend days.
+        `intensityCapMinor` is the 99th-percentile daily amount (or max when
+        fewer than 10 non-zero days). Excludes TRANSFER rows. Dates are
+        `YYYY-MM-DD` UTC.
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 7, maximum: 365, default: 90 }
+        - name: currencyCode
+          in: query
+          required: false
+          schema: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: Daily spend payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailySpendResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /stats/category-sparkline:
+    get:
+      operationId: getStatsCategorySparkline
+      summary: Per-category daily sparkline series
+      description: |
+        Daily `amountMinor` per requested category in the household's primary
+        currency. Each item has exactly `days` points, oldest→newest. Returned
+        items preserve input order of `categoryIds`. Unknown or foreign category
+        ids return 422 with `details.invalidCategoryIds`.
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: categoryIds
+          in: query
+          required: true
+          description: |
+            ULIDs of categories to chart. Repeat the param (1..10 values). The
+            service rejects unknown / cross-household / archived-and-deleted ids
+            with 422 `VALIDATION_ERROR`.
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 10
+            items: { type: string }
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 7, maximum: 90, default: 30 }
+      responses:
+        '200':
+          description: Sparkline payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategorySparklineResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /stats/sankey:
+    get:
+      operationId: getStatsSankey
+      summary: Source-to-target flow data for the Sankey chart
+      description: |
+        Single-currency Sankey nodes and links for the selected period. Income
+        categories appear as sources; expense categories, plus synthetic
+        `savings` and `transfer_out` nodes when applicable, appear as targets.
+        `currencyCode` defaults to the household's `defaultCurrencyCode`, falling
+        back to the currency with the largest absolute sum of (income+expense)
+        in the window when the default has no activity. TRANSFER rows are
+        excluded from income/expense tallies and only surface via the
+        `transfer_out` node (cross-currency outflows only).
+      tags: [stats]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: period
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/StatsPeriodKind' }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`.
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Required when `period=custom`.
+        - name: currencyCode
+          in: query
+          required: false
+          schema: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: Sankey payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SankeyResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
 components:
   parameters:
     Cursor:
@@ -3605,6 +3840,304 @@ components:
           description: Periods ordered newest-first.
           items: { $ref: '#/components/schemas/BudgetHistoryPeriod' }
 
+    StatsPeriodKind:
+      type: string
+      enum: [week, month, year, custom]
+      description: |
+        Window selector for Stats endpoints. `week|month|year` resolve to the
+        containing UTC calendar window; `custom` requires `from`+`to`.
+
+    StatsPeriodRange:
+      type: object
+      required: [kind, from, to]
+      properties:
+        kind: { $ref: '#/components/schemas/StatsPeriodKind' }
+        from:
+          type: string
+          format: date-time
+          description: Inclusive start of the window, UTC.
+        to:
+          type: string
+          format: date-time
+          description: Exclusive end of the window, UTC.
+
+    PeriodDeltaState:
+      type: string
+      enum: [has_previous, no_previous_data, zero_to_positive, zero_to_negative]
+      description: |
+        Disambiguates the meaning of `deltaPercent` null-vs-number cases.
+        `has_previous` — previous > 0, `deltaPercent` is a signed integer.
+        `no_previous_data` — both current and previous are 0, `deltaPercent` is null.
+        `zero_to_positive` — previous = 0, current > 0, `deltaPercent` is null.
+        `zero_to_negative` — previous = 0, current < 0, `deltaPercent` is null.
+
+    StatsOverviewCurrencyBucket:
+      type: object
+      required:
+        - currencyCode
+        - incomeMinor
+        - expenseMinor
+        - netMinor
+        - transactionCount
+        - previousIncomeMinor
+        - previousExpenseMinor
+        - previousNetMinor
+        - incomeDeltaPercent
+        - expenseDeltaPercent
+        - netDeltaPercent
+        - deltaState
+      properties:
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        incomeMinor:
+          type: string
+          description: Current-period income total in minor units (bigint as decimal string).
+        expenseMinor:
+          type: string
+          description: Current-period expense total in minor units (bigint as decimal string).
+        netMinor:
+          type: string
+          description: income - expense, minor units.
+        transactionCount:
+          type: integer
+          minimum: 0
+        previousIncomeMinor: { type: string }
+        previousExpenseMinor: { type: string }
+        previousNetMinor: { type: string }
+        incomeDeltaPercent:
+          type: [integer, 'null']
+          description: Signed floor percent delta vs previous period. Null when `deltaState != has_previous`.
+        expenseDeltaPercent:
+          type: [integer, 'null']
+        netDeltaPercent:
+          type: [integer, 'null']
+        deltaState:
+          $ref: '#/components/schemas/PeriodDeltaState'
+
+    StatsOverviewTopCategoryItem:
+      type: object
+      required:
+        - categoryId
+        - categoryKey
+        - label
+        - iconToken
+        - currencyCode
+        - amountMinor
+        - transactionCount
+        - percentOfTotal
+      properties:
+        categoryId: { type: string }
+        categoryKey: { type: string }
+        label: { type: string }
+        iconToken: { type: string }
+        colorToken:
+          type: [string, 'null']
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        amountMinor:
+          type: string
+          description: Category total in minor units (bigint as decimal string).
+        transactionCount:
+          type: integer
+          minimum: 0
+        percentOfTotal:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    StatsOverviewResponse:
+      type: object
+      required: [period, previousPeriod, byCurrency, topCategories]
+      properties:
+        period: { $ref: '#/components/schemas/StatsPeriodRange' }
+        previousPeriod: { $ref: '#/components/schemas/StatsPeriodRange' }
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/StatsOverviewCurrencyBucket' }
+        topCategories:
+          type: array
+          description: EXPENSE-only, primary-currency scope, sorted by `amountMinor` DESC, capped at `topCategoriesLimit`.
+          items: { $ref: '#/components/schemas/StatsOverviewTopCategoryItem' }
+
+    MonthlyTrendPoint:
+      type: object
+      required: [month, incomeMinor, expenseMinor]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          description: Calendar month bucket as `YYYY-MM` (UTC).
+        incomeMinor: { type: string }
+        expenseMinor: { type: string }
+
+    MonthlyTrendCurrencySeries:
+      type: object
+      required: [currencyCode, points]
+      properties:
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        points:
+          type: array
+          description: Exactly `months` points, oldest→newest.
+          items: { $ref: '#/components/schemas/MonthlyTrendPoint' }
+
+    MonthlyTrendResponse:
+      type: object
+      required: [series]
+      properties:
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/MonthlyTrendCurrencySeries' }
+
+    CategoryBreakdownItem:
+      type: object
+      required: [categoryId, label, amountMinor, transactionCount, percentOfTotal]
+      properties:
+        categoryId: { type: string }
+        label: { type: string }
+        iconToken:
+          type: [string, 'null']
+        colorToken:
+          type: [string, 'null']
+        amountMinor: { type: string }
+        transactionCount:
+          type: integer
+          minimum: 0
+        percentOfTotal:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    CategoryBreakdownCurrencyBucket:
+      type: object
+      required: [currencyCode, totalMinor, items]
+      properties:
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        totalMinor: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
+
+    CategoryBreakdownResponse:
+      type: object
+      required: [period, type, byCurrency]
+      properties:
+        period: { $ref: '#/components/schemas/StatsPeriodRange' }
+        type:
+          allOf:
+            - { $ref: '#/components/schemas/TransactionType' }
+          description: Echoes the `type` query argument. The service rejects TRANSFER; INCOME or EXPENSE only in practice.
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryBreakdownCurrencyBucket' }
+
+    DailySpendPoint:
+      type: object
+      required: [date, amountMinor, transactionCount]
+      properties:
+        date:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: UTC calendar day as `YYYY-MM-DD`.
+        amountMinor: { type: string }
+        transactionCount:
+          type: integer
+          minimum: 0
+
+    DailySpendCurrencySeries:
+      type: object
+      required: [currencyCode, intensityCapMinor, points]
+      properties:
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        intensityCapMinor:
+          type: string
+          description: 99th-percentile daily amount in the window (or max daily amount when fewer than 10 non-zero days). Client uses it as the heatmap intensity anchor.
+        points:
+          type: array
+          description: Exactly `days` points, oldest→newest.
+          items: { $ref: '#/components/schemas/DailySpendPoint' }
+
+    DailySpendResponse:
+      type: object
+      required: [series]
+      properties:
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/DailySpendCurrencySeries' }
+
+    CategorySparklinePoint:
+      type: object
+      required: [date, amountMinor]
+      properties:
+        date:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        amountMinor: { type: string }
+
+    CategorySparklineItem:
+      type: object
+      required: [categoryId, currencyCode, points]
+      properties:
+        categoryId: { type: string }
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        points:
+          type: array
+          description: Exactly `days` points, oldest→newest.
+          items: { $ref: '#/components/schemas/CategorySparklinePoint' }
+
+    CategorySparklineResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Items echo the input order of the `categoryIds` query param.
+          items: { $ref: '#/components/schemas/CategorySparklineItem' }
+
+    SankeyNodeKind:
+      type: string
+      enum: [income, expense, savings, transfer_out]
+
+    SankeyNode:
+      type: object
+      required: [id, kind, label]
+      properties:
+        id:
+          type: string
+          description: Stable node identifier within this response (e.g. `income:<categoryId>`, `expense:<categoryId>`, `savings`, `transfer_out`).
+        kind: { $ref: '#/components/schemas/SankeyNodeKind' }
+        label: { type: string }
+        colorToken:
+          type: [string, 'null']
+
+    SankeyLink:
+      type: object
+      required: [source, target, amountMinor]
+      properties:
+        source:
+          type: string
+          description: Source node id.
+        target:
+          type: string
+          description: Target node id.
+        amountMinor:
+          type: string
+          description: Link weight in minor units (bigint as decimal string).
+
+    SankeyResponse:
+      type: object
+      required: [period, currencyCode, nodes, links]
+      properties:
+        period: { $ref: '#/components/schemas/StatsPeriodRange' }
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: The single currency this Sankey response represents.
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/SankeyNode' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/SankeyLink' }
+
 security:
   - BearerAuth: []
 
@@ -3631,3 +4164,5 @@ tags:
     description: Household-wide and per-category spending ceilings with threshold notifications and per-period rollover.
   - name: notifications
     description: Per-user notification surfaces (unread counts, list, mark-read).
+  - name: stats
+    description: Read-only aggregate analytics over transactions (overview, trends, category breakdown, daily spend, sparklines, Sankey flow).

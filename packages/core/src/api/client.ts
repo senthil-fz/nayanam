@@ -48,6 +48,14 @@ type PeriodEnum = ApiSchemas['PeriodEnum'];
 type NotificationUnreadCountResponse =
   ApiSchemas['NotificationUnreadCountResponse'];
 
+type StatsPeriodKind = ApiSchemas['StatsPeriodKind'];
+type StatsOverviewResponse = ApiSchemas['StatsOverviewResponse'];
+type MonthlyTrendResponse = ApiSchemas['MonthlyTrendResponse'];
+type CategoryBreakdownResponse = ApiSchemas['CategoryBreakdownResponse'];
+type DailySpendResponse = ApiSchemas['DailySpendResponse'];
+type CategorySparklineResponse = ApiSchemas['CategorySparklineResponse'];
+type SankeyResponse = ApiSchemas['SankeyResponse'];
+
 type Budget = ApiSchemas['Budget'];
 type BudgetsPage = ApiSchemas['BudgetsPage'];
 type BudgetScope = ApiSchemas['BudgetScope'];
@@ -481,6 +489,38 @@ export function createApiClient(opts: ApiClientOptions) {
       request<BudgetHistoryResponse>(`/budgets/${id}/history`, {
         query: { periods },
       }),
+
+    // Stats (read-only; household-scoped via X-Household-Id)
+    getStatsOverview: (q: {
+      period: StatsPeriodKind;
+      from?: string;
+      to?: string;
+      topCategoriesLimit?: number;
+    }) => request<StatsOverviewResponse>('/stats/overview', { query: q }),
+    getStatsMonthlyTrend: (q: { months?: number; currencyCode?: string } = {}) =>
+      request<MonthlyTrendResponse>('/stats/monthly-trend', { query: q }),
+    getStatsCategoryBreakdown: (q: {
+      period: StatsPeriodKind;
+      from?: string;
+      to?: string;
+      type?: 'INCOME' | 'EXPENSE';
+      currencyCode?: string;
+    }) => request<CategoryBreakdownResponse>('/stats/category-breakdown', { query: q }),
+    getStatsDailySpend: (q: { days?: number; currencyCode?: string } = {}) =>
+      request<DailySpendResponse>('/stats/daily-spend', { query: q }),
+    getStatsCategorySparkline: (q: {
+      categoryIds: readonly string[];
+      days?: number;
+    }) =>
+      request<CategorySparklineResponse>('/stats/category-sparkline', {
+        query: { categoryIds: q.categoryIds, days: q.days },
+      }),
+    getStatsSankey: (q: {
+      period: StatsPeriodKind;
+      from?: string;
+      to?: string;
+      currencyCode?: string;
+    }) => request<SankeyResponse>('/stats/sankey', { query: q }),
 
     // Generic escape hatch
     raw: request,

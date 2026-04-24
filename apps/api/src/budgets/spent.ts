@@ -6,7 +6,7 @@ import {
   effectivePeriodLowerBound,
   previousPeriodStart,
   type BudgetPeriod,
-} from './period';
+} from '../common/period';
 
 export type AnyTx = Prisma.TransactionClient | PrismaService;
 

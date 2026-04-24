@@ -1,18 +1,14 @@
-import { View, Text } from 'react-native';
+// Stats tab entry — a thin shell that delegates everything to the
+// Phase 7 orchestrator in `src/features/stats/StatsScreen.tsx`.
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LIGHT } from '@nayanam/ui-tokens';
+import { StatsScreen } from '../../src/features/stats/StatsScreen';
 
 export default function StatsTab() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: LIGHT.bg }} edges={['top']}>
-      <View style={{ padding: 20 }}>
-        <Text style={{ fontSize: 28, fontWeight: '700', color: LIGHT.text, letterSpacing: -0.5 }}>
-          Stats
-        </Text>
-        <Text style={{ color: LIGHT.textDim, marginTop: 8 }}>
-          Category breakdowns land in Phase 6.
-        </Text>
-      </View>
+      <StatsScreen />
     </SafeAreaView>
   );
 }

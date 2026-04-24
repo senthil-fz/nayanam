@@ -17,6 +17,7 @@ import { TransfersModule } from './transfers/transfers.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { BillsModule } from './bills/bills.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { StatsModule } from './stats/stats.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 
 @Module({
@@ -46,6 +47,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
     NotificationsModule,
     BillsModule,
     BudgetsModule,
+    StatsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

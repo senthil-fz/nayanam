@@ -5,6 +5,7 @@ import {
   makeBudgetHooks,
   makeCategoryHooks,
   makeNotificationHooks,
+  makeStatsHooks,
   makeTransactionHooks,
 } from '@nayanam/core';
 import { apiClient, useAuthStore } from './api';
@@ -77,6 +78,15 @@ export const {
   useRestoreBudget,
   useReorderBudgets,
 } = makeBudgetHooks(apiClient);
+
+export const {
+  useStatsOverview,
+  useMonthlyTrend,
+  useCategoryBreakdown,
+  useDailySpend,
+  useCategorySparkline,
+  useSankey,
+} = makeStatsHooks(apiClient);
 
 export const {
   useBills,

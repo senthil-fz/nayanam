@@ -136,11 +136,11 @@ Maps to prototype "Stats" screen.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-701 | Aggregate endpoints: monthly income/expense (N months back), category totals (period), daily spend (30d), period summary with vs-previous-period delta | api | todo | |
-| F-702 | Sankey data endpoint: sources (income by category) → targets (expense by category + savings + transfers out) | api | todo | |
-| F-703 | Period selector (Week/Month/Year) with real data (fix prototype no-op) | web, mobile | todo | |
-| F-704 | Chart components: bars, pie/donut, line, heatmap, sankey — rendered from real data, web uses the prototype's chart code as reference (rewrite cleanly), mobile uses `victory-native` or `react-native-svg` equivalents | web, mobile | todo | |
-| F-705 | Top categories grid with real per-category sparklines (replaces `Math.random`) | web, mobile | todo | |
+| F-701 | Aggregate endpoints: monthly income/expense (N months back), category totals (period), daily spend (30d), period summary with vs-previous-period delta | api | shipped | [spec](specs/2026-04-24-phase-7-stats.md) |
+| F-702 | Sankey data endpoint: sources (income by category) → targets (expense by category + savings + transfers out) | api | shipped | [spec](specs/2026-04-24-phase-7-stats.md) — `transfer_out` node deferred (cross-currency transfers); `savings` clamped ≥ 0 |
+| F-703 | Period selector (Week/Month/Year) with real data (fix prototype no-op) | web, mobile | shipped | [spec](specs/2026-04-24-phase-7-stats.md) |
+| F-704 | Chart components: bars, pie/donut, line, heatmap, sankey — rendered from real data, web uses the prototype's chart code as reference (rewrite cleanly), mobile uses `victory-native` or `react-native-svg` equivalents | web, mobile | shipped | [spec](specs/2026-04-24-phase-7-stats.md) — all charts SVG in-repo, no third-party chart lib; shared `layoutSankey` helper |
+| F-705 | Top categories grid with real per-category sparklines (replaces `Math.random`) | web, mobile | shipped | [spec](specs/2026-04-24-phase-7-stats.md) |
 
 ## Phase 8 — Attachments & Notifications In-App
 

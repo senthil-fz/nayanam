@@ -17,7 +17,8 @@
     "./transactions": "./src/transactions/index.ts",
     "./bills": "./src/bills/index.ts",
     "./budgets": "./src/budgets/index.ts",
-    "./notifications": "./src/notifications/index.ts"
+    "./notifications": "./src/notifications/index.ts",
+    "./stats": "./src/stats/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

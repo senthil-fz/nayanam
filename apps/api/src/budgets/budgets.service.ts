@@ -17,7 +17,7 @@ import {
   currentPeriodStart,
   previousPeriodStart,
   type BudgetPeriod,
-} from './period';
+} from '../common/period';
 import {
   THRESHOLD_LADDER,
   computeHistoricalSpent,
