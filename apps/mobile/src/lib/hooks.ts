@@ -2,9 +2,12 @@ import {
   makeAccountHooks,
   makeAuthHooks,
   makeCategoryHooks,
+  makeNotificationHooks,
   makeTransactionHooks,
 } from '@nayanam/core';
 import { apiClient, useAuthStore } from './api';
+
+export { useHomeStore } from '../stores/home';
 
 export const {
   useMe,
@@ -25,12 +28,15 @@ export const {
   useAccount,
   useAccountsSummary,
   useBalanceHistory,
+  useBalanceHistoryAll,
   useCreateAccount,
   useUpdateAccount,
   useArchiveAccount,
   useRestoreAccount,
   useReorderAccounts,
 } = makeAccountHooks(apiClient);
+
+export const { useUnreadNotificationCount } = makeNotificationHooks(apiClient);
 
 export const {
   useCategories,
@@ -44,6 +50,7 @@ export const {
 
 export const {
   useTransactions,
+  usePeriodSummary,
   useTransaction,
   useCreateTransaction,
   useUpdateTransaction,

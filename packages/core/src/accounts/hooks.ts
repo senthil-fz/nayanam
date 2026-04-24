@@ -86,6 +86,14 @@ export function makeAccountHooks(client: ApiClient) {
     });
   }
 
+  function useBalanceHistoryAll(days = 14) {
+    return useQuery({
+      queryKey: [...accountsRoot, 'balance-history-all', days] as const,
+      queryFn: () => client.getAccountsBalanceHistoryAll(days),
+      staleTime: 60_000,
+    });
+  }
+
   function invalidateList(qc: ReturnType<typeof useQueryClient>) {
     void qc.invalidateQueries({ queryKey: accountsRoot });
   }
@@ -187,6 +195,7 @@ export function makeAccountHooks(client: ApiClient) {
     useAccount,
     useAccountsSummary,
     useBalanceHistory,
+    useBalanceHistoryAll,
     useCreateAccount,
     useUpdateAccount,
     useArchiveAccount,

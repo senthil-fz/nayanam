@@ -98,6 +98,26 @@ export const AccountsSummary = z.object({
 });
 export type AccountsSummaryType = z.infer<typeof AccountsSummary>;
 
+// Phase 4 — household-wide daily history.
+export const BalanceHistoryDailyPoint = z.object({
+  bucket: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
+  asOf: z.string().datetime(),
+  balanceMinor: MinorAmountString,
+});
+export type BalanceHistoryDailyPointType = z.infer<typeof BalanceHistoryDailyPoint>;
+
+export const BalanceHistoryAllBucket = z.object({
+  currencyCode: CurrencyCode,
+  points: z.array(BalanceHistoryDailyPoint),
+});
+export type BalanceHistoryAllBucketType = z.infer<typeof BalanceHistoryAllBucket>;
+
+export const BalanceHistoryAllResponse = z.object({
+  byCurrency: z.array(BalanceHistoryAllBucket),
+  asOf: z.string().datetime(),
+});
+export type BalanceHistoryAllResponseType = z.infer<typeof BalanceHistoryAllResponse>;
+
 export const ReorderAccountsEntry = z.object({
   id: z.string(),
   displayOrder: z.number().int().nonnegative(),

@@ -28,6 +28,7 @@ import type {
   BulkCreateTransactionsInputType,
   CreateTransactionInputType,
   CreateTransferInputType,
+  HomePeriodType,
   ListTransactionsQueryType,
   TransactionType,
   UpdateTransactionInputType,
@@ -108,6 +109,9 @@ function invalidateAfterMutation(
   void qc.invalidateQueries({ queryKey: transactionsRoot });
   void qc.invalidateQueries({ queryKey: accountsRoot });
   void qc.invalidateQueries({ queryKey: [...accountsRoot, 'summary'] });
+  // Phase 4: Home aggregates — invalidate broadly so any param variant is refetched.
+  void qc.invalidateQueries({ queryKey: [...transactionsRoot, 'period-summary'] });
+  void qc.invalidateQueries({ queryKey: [...accountsRoot, 'balance-history-all'] });
   for (const id of touchedAccountIds) {
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id, 'balance-history'] });
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });
@@ -126,6 +130,16 @@ export function makeTransactionHooks(client: ApiClient) {
         }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (last) => last.nextCursor ?? undefined,
+    });
+  }
+
+  function usePeriodSummary(
+    q: { period?: HomePeriodType; from?: string; to?: string } = {},
+  ) {
+    return useQuery({
+      queryKey: [...transactionsRoot, 'period-summary', q] as const,
+      queryFn: () => client.getTransactionsPeriodSummary(q),
+      staleTime: 30_000,
     });
   }
 
@@ -273,6 +287,7 @@ export function makeTransactionHooks(client: ApiClient) {
 
   return {
     useTransactions,
+    usePeriodSummary,
     useTransaction,
     useCreateTransaction,
     useUpdateTransaction,

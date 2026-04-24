@@ -1,22 +1,32 @@
 // App-level API client + auth store wiring for the web app.
 // Mobile has its own file (lib/api.ts) with SecureStore + AsyncStorage adapters.
 
-import { createApiClient, createAuthStore, type ApiClient, type AuthState } from '@nayanam/core';
+import {
+  createApiClient,
+  createAuthStore,
+  createHomeStore,
+  type ApiClient,
+  type AuthState,
+  type HomeState,
+} from '@nayanam/core';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 
 const BASE_URL: string =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
 
-const webStorage: PersistStorage<AuthState> = {
-  getItem: (name) => {
-    const raw = localStorage.getItem(name);
-    return raw ? (JSON.parse(raw) as StorageValue<AuthState>) : null;
-  },
-  setItem: (name, value) => localStorage.setItem(name, JSON.stringify(value)),
-  removeItem: (name) => localStorage.removeItem(name),
-};
+function makeWebStorage<T>(): PersistStorage<T> {
+  return {
+    getItem: (name) => {
+      const raw = localStorage.getItem(name);
+      return raw ? (JSON.parse(raw) as StorageValue<T>) : null;
+    },
+    setItem: (name, value) => localStorage.setItem(name, JSON.stringify(value)),
+    removeItem: (name) => localStorage.removeItem(name),
+  };
+}
 
-export const useAuthStore = createAuthStore(webStorage);
+export const useAuthStore = createAuthStore(makeWebStorage<AuthState>());
+export const useHomeStore = createHomeStore(makeWebStorage<HomeState>());
 
 export const apiClient: ApiClient = createApiClient({
   baseUrl: BASE_URL,

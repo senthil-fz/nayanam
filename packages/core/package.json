@@ -14,7 +14,8 @@
     "./api": "./src/api/client.ts",
     "./accounts": "./src/accounts/index.ts",
     "./categories": "./src/categories/index.ts",
-    "./transactions": "./src/transactions/index.ts"
+    "./transactions": "./src/transactions/index.ts",
+    "./notifications": "./src/notifications/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

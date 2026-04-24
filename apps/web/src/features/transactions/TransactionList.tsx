@@ -22,6 +22,8 @@ type Props = {
   onRestore?: (t: Transaction) => void;
   compact?: boolean;
   hideDelete?: boolean;
+  /** Redact trailing amounts as "••••••" (Home hide-balances). */
+  redactAmounts?: boolean;
   /** Account id representing "you" for transfer rows. When the row's account
    * equals this, the destination semantics apply. */
   currentAccountId?: string;
@@ -41,6 +43,7 @@ export function TransactionList({
   onRestore,
   compact,
   hideDelete,
+  redactAmounts,
   currentAccountId,
 }: Props) {
   const grouped = useMemo(() => groupByDay(transactions), [transactions]);
@@ -96,6 +99,7 @@ export function TransactionList({
                   onRestore={onRestore}
                   compact={compact}
                   hideDelete={hideDelete}
+                  redactAmount={redactAmounts}
                 />
               </li>
             ))}

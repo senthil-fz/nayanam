@@ -86,6 +86,75 @@ export class AccountsService {
     return { accountId: acct.id, currencyCode: acct.currencyCode, points };
   }
 
+  /**
+   * Household-wide daily balance history across every non-archived,
+   * non-deleted account, aggregated per currency. Returns exactly `days`
+   * points per currency; zero-activity days flat-forward from the previous
+   * day because the per-account helper emits a point for every bucket.
+   *
+   * Complexity: O(N_accounts * days) serial calls into the per-account SQL.
+   * For Phase 4 scale (days ≤ 90, typical N < 20) this is well under the
+   * 200ms budget; if profiling shows pressure later we can batch via a
+   * single `generate_series` CTE.
+   */
+  async balanceHistoryAll(days: number): Promise<{
+    byCurrency: Array<{
+      currencyCode: string;
+      points: Array<{ bucket: string; asOf: string; balanceMinor: string }>;
+    }>;
+    asOf: string;
+  }> {
+    const householdId = getHouseholdOrThrow();
+    const now = new Date();
+
+    const accounts = await this.prisma.account.findMany({
+      where: { householdId, deletedAt: null, archivedAt: null },
+      select: { id: true, currencyCode: true },
+    });
+
+    if (accounts.length === 0) {
+      return { byCurrency: [], asOf: now.toISOString() };
+    }
+
+    // bucket → bigint sum
+    type BucketMap = Map<string, { asOf: string; sum: bigint }>;
+    const byCurrency = new Map<string, BucketMap>();
+
+    for (const acct of accounts) {
+      const points = await this.balance.balanceHistoryDaily(acct.id, days);
+      let buckets = byCurrency.get(acct.currencyCode);
+      if (!buckets) {
+        buckets = new Map();
+        byCurrency.set(acct.currencyCode, buckets);
+      }
+      for (const p of points) {
+        const existing = buckets.get(p.bucket);
+        const add = BigInt(p.balanceMinor);
+        if (existing) {
+          existing.sum += add;
+          // asOf is identical across accounts for the same bucket.
+        } else {
+          buckets.set(p.bucket, { asOf: p.asOf, sum: add });
+        }
+      }
+    }
+
+    const currencies = Array.from(byCurrency.keys()).sort();
+    const result = currencies.map((currencyCode) => {
+      const buckets = byCurrency.get(currencyCode)!;
+      const keys = Array.from(buckets.keys()).sort(); // "YYYY-MM-DD" sorts lexicographically.
+      return {
+        currencyCode,
+        points: keys.map((bucket) => {
+          const b = buckets.get(bucket)!;
+          return { bucket, asOf: b.asOf, balanceMinor: b.sum.toString() };
+        }),
+      };
+    });
+
+    return { byCurrency: result, asOf: now.toISOString() };
+  }
+
   // ---- Writes ----
 
   async create(input: {

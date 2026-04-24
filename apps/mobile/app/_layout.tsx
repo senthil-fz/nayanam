@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { focusManager } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, View, Text, Pressable } from 'react-native';
 import { useAuthStore } from '../src/lib/api';
@@ -18,6 +19,18 @@ export default function RootLayout() {
   const segments = useSegments();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const appStateRef = useRef(AppState.currentState);
+
+  // AppState → TanStack Query focus bridge. Pauses every query (including
+  // the notification bell's 60s poll) while the app is backgrounded and
+  // resumes them on foreground. Runs once at root mount so every query
+  // benefits without per-screen wiring.
+  useEffect(() => {
+    focusManager.setFocused(AppState.currentState === 'active');
+    const sub = AppState.addEventListener('change', (state) => {
+      focusManager.setFocused(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
 
   // Wait for zustand-persist hydration
   useEffect(() => {

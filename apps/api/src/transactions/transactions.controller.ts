@@ -20,6 +20,7 @@ import {
   BulkCreateTransactionsDto,
   CreateTransactionDto,
   ListTransactionsQuerySchema,
+  PeriodSummaryQuerySchema,
   UpdateTransactionDto,
 } from './transactions.dto';
 
@@ -46,6 +47,12 @@ export class TransactionsController {
   @UseInterceptors(IdempotencyInterceptor)
   bulk(@Body() body: BulkCreateTransactionsDto) {
     return this.svc.bulkCreate(body.items);
+  }
+
+  @Get('period-summary')
+  periodSummary(@Query() q: Record<string, string>) {
+    const parsed = PeriodSummaryQuerySchema.parse(q);
+    return this.svc.periodSummary(parsed);
   }
 
   @Get(':id')

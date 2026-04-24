@@ -23,6 +23,8 @@ type Props = {
   compact?: boolean;
   /** Hide the delete button (VIEWER role). */
   hideDelete?: boolean;
+  /** When true, redact the trailing amount as "••••••" (Home hide-balances). */
+  redactAmount?: boolean;
 };
 
 function resolveTint(token: string | undefined | null) {
@@ -44,6 +46,7 @@ export function TransactionRow({
   onRestore,
   compact,
   hideDelete,
+  redactAmount,
 }: Props) {
   const isDeleted = Boolean(t.deletedAt);
   const isTransfer = t.type === 'TRANSFER';
@@ -104,8 +107,11 @@ export function TransactionRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className={`text-sm font-semibold tabular-nums ${toneClass}`}>
-          {amount.text}
+        <div
+          className={`text-sm font-semibold tabular-nums ${toneClass}`}
+          aria-label={redactAmount ? 'Amount hidden' : undefined}
+        >
+          {redactAmount ? '••••••' : amount.text}
         </div>
         {!compact ? (
           <div

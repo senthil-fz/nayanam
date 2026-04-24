@@ -41,6 +41,13 @@ type CreateTransferInput = ApiSchemas['CreateTransferInput'];
 type TransferWithPairedTransactions = ApiSchemas['TransferWithPairedTransactions'];
 type TransactionType = ApiSchemas['TransactionType'];
 
+type AccountsBalanceHistoryAllResponse =
+  ApiSchemas['AccountsBalanceHistoryAllResponse'];
+type PeriodSummaryResponse = ApiSchemas['PeriodSummaryResponse'];
+type PeriodEnum = ApiSchemas['PeriodEnum'];
+type NotificationUnreadCountResponse =
+  ApiSchemas['NotificationUnreadCountResponse'];
+
 export type ApiError = {
   status: number;
   code: string;
@@ -277,6 +284,10 @@ export function createApiClient(opts: ApiClientOptions) {
     getAccountsSummary: () => request<AccountsSummaryResponse>('/accounts/summary'),
     getAccountBalanceHistory: (id: string, months = 6) =>
       request<BalanceHistoryResponse>(`/accounts/${id}/balance-history`, { query: { months } }),
+    getAccountsBalanceHistoryAll: (days = 14) =>
+      request<AccountsBalanceHistoryAllResponse>('/accounts/balance-history-all', {
+        query: { days },
+      }),
 
     // Categories (household-scoped; system rows share the same list)
     listCategories: (params?: {
@@ -328,6 +339,18 @@ export function createApiClient(opts: ApiClientOptions) {
         method: 'POST',
         body,
         idempotencyKey,
+      }),
+    getTransactionsPeriodSummary: (q: {
+      period?: PeriodEnum;
+      from?: string;
+      to?: string;
+    } = {}) =>
+      request<PeriodSummaryResponse>('/transactions/period-summary', { query: q }),
+
+    // Notifications (user-scoped; X-Household-Id ignored server-side but sent for consistency)
+    getNotificationUnreadCount: () =>
+      request<NotificationUnreadCountResponse>('/notifications/unread-count', {
+        crossHousehold: true,
       }),
 
     // Transfers

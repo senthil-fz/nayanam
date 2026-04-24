@@ -32,6 +32,12 @@ export type TransactionRowProps = {
   compact?: boolean;
   /** "Syncing…" pill rendered at the right edge (offline-queued rows). */
   isSyncing?: boolean;
+  /**
+   * When true, the right-side amount is rendered as `••••••` — used by the
+   * Home screen's hide-balances toggle. Additive, defaults to false so
+   * existing callers (Transactions tab, Card detail) are unaffected.
+   */
+  redactAmount?: boolean;
   onPress?: (t: Transaction) => void;
 };
 
@@ -51,6 +57,7 @@ export function TransactionRow({
   showDayCap = true,
   compact,
   isSyncing,
+  redactAmount,
   onPress,
 }: TransactionRowProps) {
   const isDeleted = Boolean(t.deletedAt);
@@ -82,7 +89,10 @@ export function TransactionRow({
     .filter(Boolean)
     .join(' · ');
 
-  const a11yAmount = amount.text.replace('−', 'minus ').replace('+', 'plus ');
+  const displayAmount = redactAmount ? '••••••' : amount.text;
+  const a11yAmount = redactAmount
+    ? 'amount hidden'
+    : amount.text.replace('−', 'minus ').replace('+', 'plus ');
   const a11yLabel = [
     label,
     a11yAmount,
@@ -160,7 +170,7 @@ export function TransactionRow({
           }}
           numberOfLines={1}
         >
-          {amount.text}
+          {displayAmount}
         </Text>
         {isSyncing ? (
           <View

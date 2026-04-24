@@ -17,6 +17,7 @@ import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { AccountsService } from './accounts.service';
 import {
+  BalanceHistoryAllQuerySchema,
   BalanceHistoryQuerySchema,
   CreateAccountDto,
   ListAccountsQuerySchema,
@@ -45,6 +46,12 @@ export class AccountsController {
   @Get('summary')
   summary() {
     return this.svc.summary();
+  }
+
+  @Get('balance-history-all')
+  balanceHistoryAll(@Query() q: Record<string, string>) {
+    const { days } = BalanceHistoryAllQuerySchema.parse(q);
+    return this.svc.balanceHistoryAll(days ?? 14);
   }
 
   @Post('reorder')

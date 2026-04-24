@@ -27,6 +27,7 @@ model User {
   memberships        HouseholdMember[]
   invitesSent        HouseholdInvite[]   @relation("InvitedBy")
   notificationTokens NotificationToken[]
+  notifications      Notification[]
   idempotencyKeys    IdempotencyKey[]
   eventsActed        Event[]             @relation("EventActor")
 
@@ -74,13 +75,14 @@ model Household {
   createdBy           String?   @map("created_by") @db.VarChar(26)
   updatedBy           String?   @map("updated_by") @db.VarChar(26)
 
-  members      HouseholdMember[]
-  invites      HouseholdInvite[]
-  events       Event[]
-  accounts     Account[]
-  categories   Category[]
-  transactions Transaction[]
-  transfers    Transfer[]
+  members       HouseholdMember[]
+  invites       HouseholdInvite[]
+  events        Event[]
+  accounts      Account[]
+  categories    Category[]
+  transactions  Transaction[]
+  transfers     Transfer[]
+  notifications Notification[]
 
   @@map("households")
 }
@@ -226,6 +228,23 @@ model HouseholdInvite {
   @@index([householdId], map: "idx_hi_household")
   @@index([email], map: "idx_hi_email")
   @@map("household_invites")
+}
+
+model Notification {
+  id          String    @id @db.VarChar(26)
+  userId      String    @map("user_id") @db.VarChar(26)
+  householdId String?   @map("household_id") @db.VarChar(26)
+  type        String
+  payload     Json      @default("{}")
+  readAt      DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt], map: "idx_notifications_user_read")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_notifications_user_created")
+  @@map("notifications")
 }
 
 model NotificationToken {

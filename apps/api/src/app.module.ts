@@ -13,6 +13,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { CategoriesModule } from './categories/categories.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { TransfersModule } from './transfers/transfers.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 
 @Module({
@@ -38,6 +39,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
     CategoriesModule,
     TransactionsModule,
     TransfersModule,
+    NotificationsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

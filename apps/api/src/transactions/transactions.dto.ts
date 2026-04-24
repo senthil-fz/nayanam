@@ -43,6 +43,21 @@ export const BulkCreateTransactionsSchema = z.object({
 });
 export class BulkCreateTransactionsDto extends createZodDto(BulkCreateTransactionsSchema) {}
 
+export const PeriodEnum = z.enum(['day', 'week', 'month', 'year']);
+
+/**
+ * `period` and `from`/`to` are mutually exclusive; if both land the service
+ * rejects with VALIDATION_ERROR (controller passes raw fields through so the
+ * service can distinguish "both supplied" from "neither supplied").
+ */
+export const PeriodSummaryQuerySchema = z
+  .object({
+    period: PeriodEnum.optional(),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+  })
+  .passthrough();
+
 export const ListTransactionsQuerySchema = z
   .object({
     cursor: z.string().optional(),

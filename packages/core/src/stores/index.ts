@@ -24,3 +24,4 @@ export function createPersistedStore<T>(
 }
 
 export * from './auth';
+export * from './home';

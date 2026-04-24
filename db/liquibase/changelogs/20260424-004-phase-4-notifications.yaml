@@ -1,0 +1,74 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-004-phase-4-notifications
+      author: nayanam
+      comment: |
+        Phase 4 — minimum-viable notifications table. User-scoped; optional
+        household context. read_at IS NULL ⇒ unread. No soft delete; periodic
+        purge is the retention strategy.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: notifications
+      changes:
+        - createTable:
+            tableName: notifications
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_notifications_user
+                    references: users(id)
+                    deleteCascade: true
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_notifications_household
+                    references: households(id)
+              - column: { name: type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: payload, type: JSONB, defaultValueComputed: "'{}'::jsonb", constraints: { nullable: false } }
+              - column: { name: read_at, type: TIMESTAMPTZ }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        # household_id → SET NULL on household delete (Liquibase does not expose
+        # deleteSetNull in the inline FK syntax, so adjust the constraint here).
+        - sql:
+            sql: |
+              ALTER TABLE notifications
+                DROP CONSTRAINT fk_notifications_household,
+                ADD CONSTRAINT fk_notifications_household
+                  FOREIGN KEY (household_id) REFERENCES households(id)
+                  ON DELETE SET NULL;
+        - createIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_read
+            columns:
+              - column: { name: user_id }
+              - column: { name: read_at }
+        - createIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: created_at, descending: true }
+        - sql:
+            sql: |
+              CREATE INDEX idx_notifications_household
+                ON notifications (household_id)
+                WHERE household_id IS NOT NULL;
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_notifications_household;
+        - dropIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_created
+        - dropIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_read
+        - dropTable:
+            tableName: notifications

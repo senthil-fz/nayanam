@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { LIGHT, ACCENTS } from '@nayanam/ui-tokens';
-import { HomeIcon, StatsIcon, BillsIcon, CardIcon, SettingsIcon } from '../../src/features/cards/icons';
+import { HomeIcon, StatsIcon, BillsIcon, CardIcon } from '../../src/features/cards/icons';
 
 // Bottom-tab shell matching the prototype: Home · Stats · Bills · Cards · Settings.
 // The central scan FAB is deferred to a later phase; the scan action lives on Home.
@@ -59,13 +59,6 @@ export default function TabsLayout() {
         options={{
           title: 'Cards',
           tabBarIcon: ({ color }) => <CardIcon color={color} size={22} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <SettingsIcon color={color} size={22} />,
         }}
       />
     </Tabs>

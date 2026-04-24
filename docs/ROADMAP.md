@@ -98,12 +98,12 @@ All Home widgets, now that data exists.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-401 | Balance hero: total balance across accounts, income/expense this period, hide/show toggle (persisted per-device) | web, mobile | todo | |
-| F-402 | 14-day balance sparkline endpoint + render | api, web, mobile | todo | |
-| F-403 | Quick actions grid — only keep: Add expense, Add income, Add transfer, Scan (disabled "coming soon"), Bills | web, mobile | todo | |
-| F-404 | Monthly budget summary widget (depends on F-601) — placeholder until budgets phase | web, mobile | todo | |
-| F-405 | Recent activity list (top 8) with segmented filter, "See all" → Stats | web, mobile | todo | |
-| F-406 | Header: avatar (→ Settings), greeting with name, notifications bell with unread dot | web, mobile | todo | |
+| F-401 | Balance hero: total balance across accounts, income/expense this period, hide/show toggle (persisted per-device) | web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) |
+| F-402 | 14-day balance sparkline endpoint + render | api, web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) |
+| F-403 | Quick actions grid — only keep: Add expense, Add income, Add transfer, Scan (disabled "coming soon"), Bills | web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) |
+| F-404 | Monthly budget summary widget (depends on F-601) — placeholder until budgets phase | web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) — placeholder card, real wiring in Phase 6 |
+| F-405 | Recent activity list (top 8) with segmented filter, "See all" → Stats | web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) — "See all" links to /transactions until Phase 7 Stats |
+| F-406 | Header: avatar (→ Settings), greeting with name, notifications bell with unread dot | web, mobile | shipped | [spec](specs/2026-04-24-phase-4-home-screen.md) — notifications table + unread-count endpoint shipped in-phase; center UI lands in Phase 8 |
 
 ## Phase 5 — Bills / Subscriptions
 

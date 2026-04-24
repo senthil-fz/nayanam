@@ -377,6 +377,38 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
 
+  /accounts/balance-history-all:
+    get:
+      operationId: getAccountsBalanceHistoryAll
+      summary: Household-wide daily balance history across all active accounts
+      description: |
+        Aggregates daily balance points across every non-archived, non-deleted
+        account in the household, bucketed per currency. Bucket key is
+        `"YYYY-MM-DD"` (UTC). For past days `asOf` is end-of-day
+        (23:59:59.999Z); the final point uses `now()` so the last bar reflects
+        real-time balance. Empty households return `byCurrency: []` with a
+        current `asOf`. Any household member role is permitted.
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 14
+      responses:
+        '200':
+          description: Household-wide daily balance history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsBalanceHistoryAllResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
   /accounts/reorder:
     post:
       operationId: reorderAccounts
@@ -820,6 +852,49 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
 
+  /transactions/period-summary:
+    get:
+      operationId: getTransactionsPeriodSummary
+      summary: Income/expense/net aggregates for a period
+      description: |
+        Returns per-currency income, expense, net, and transaction count for
+        the requested period. TRANSFER rows are excluded (transfers net to
+        zero). Query semantics:
+          * `period` — named window: `day` / `week` (ISO week starting Monday)
+            / `month` / `year`. Boundary is `[start-of-window, now()]` (UTC).
+          * `from` + `to` — inclusive custom range (ISO date-time, UTC). Both
+            must be supplied together; `from < to`; span ≤ 366 days; `to`
+            must not exceed `now() + 1min`.
+        If both `period` and `from`/`to` are supplied, the request is
+        rejected with `VALIDATION_ERROR` (422). When neither is supplied,
+        defaults to `period=month`. Any household member role is permitted.
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: period
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/PeriodEnum' }
+        - name: from
+          in: query
+          required: false
+          description: ISO date-time (UTC), inclusive lower bound. Required together with `to`.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          description: ISO date-time (UTC), inclusive upper bound. Required together with `from`.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Period summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PeriodSummaryResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
   /transactions/bulk-create:
     post:
       operationId: bulkCreateTransactions
@@ -1061,6 +1136,26 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+
+  /notifications/unread-count:
+    get:
+      operationId: getNotificationsUnreadCount
+      summary: Count of unread notifications for the current user
+      description: |
+        Returns the number of notifications for the authenticated user where
+        `readAt IS NULL`. Scope is user-only: notifications follow a user
+        across households, so `X-Household-Id` is NOT required and is
+        ignored if sent. The value is capped at `9999` — any true count of
+        `9999` or greater is returned as `9999` (clients render `99+`).
+        Any authenticated user may call this endpoint.
+      tags: [notifications]
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationUnreadCountResponse' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /invites/accept:
     post:
@@ -1555,6 +1650,52 @@ components:
           description: Oldest→newest. Length equals the requested `months` window.
           items: { $ref: '#/components/schemas/BalanceHistoryPoint' }
 
+    BalanceHistoryDailyPoint:
+      type: object
+      required: [bucket, asOf, balanceMinor]
+      properties:
+        bucket:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+          description: Day key "YYYY-MM-DD" (UTC).
+        asOf:
+          type: string
+          format: date-time
+          description: |
+            End-of-day instant (23:59:59.999Z UTC) for past days; `now()` for
+            the current day's point.
+        balanceMinor:
+          type: string
+          description: Aggregated balance in minor units at `asOf`, as a bigint-safe decimal string.
+
+    AccountsBalanceHistoryAllBucket:
+      type: object
+      required: [currencyCode, points]
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        points:
+          type: array
+          description: |
+            Oldest→newest. Length equals the requested `days` window. Every
+            bucket exists even when no activity that day (flat-forward from
+            the previous day's value).
+          items: { $ref: '#/components/schemas/BalanceHistoryDailyPoint' }
+
+    AccountsBalanceHistoryAllResponse:
+      type: object
+      required: [byCurrency, asOf]
+      properties:
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/AccountsBalanceHistoryAllBucket' }
+        asOf:
+          type: string
+          format: date-time
+          description: Server time at which the history was computed. UTC.
+
     ReorderAccountsEntry:
       type: object
       required: [id, displayOrder]
@@ -1841,6 +1982,75 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Transaction' }
 
+    PeriodEnum:
+      type: string
+      enum: [day, week, month, year]
+      description: |
+        Named time window, anchored to the current UTC moment:
+          * `day` — today UTC (00:00 → now).
+          * `week` — ISO week to date, Monday-start (UTC).
+          * `month` — first-of-month to now (UTC).
+          * `year` — Jan 1 to now (UTC).
+
+    PeriodSummaryBucket:
+      type: object
+      required: [currencyCode, incomeMinor, expenseMinor, netMinor, transactionCount]
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        incomeMinor:
+          type: string
+          description: Sum of INCOME row amounts (positive, bigint-safe decimal string).
+        expenseMinor:
+          type: string
+          description: Sum of |amount| for EXPENSE rows (positive, bigint-safe decimal string).
+        netMinor:
+          type: string
+          description: |
+            `incomeMinor - expenseMinor`. Signed; encoded as a bigint-safe
+            decimal string (may start with `-`).
+        transactionCount:
+          type: integer
+          minimum: 0
+          description: Count of included INCOME/EXPENSE rows (excludes transfers).
+
+    PeriodSummaryRange:
+      type: object
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date-time
+          description: Inclusive lower bound of the resolved window. UTC.
+        to:
+          type: string
+          format: date-time
+          description: Inclusive upper bound of the resolved window. UTC.
+
+    PeriodSummaryResponse:
+      type: object
+      required: [byCurrency, period]
+      properties:
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/PeriodSummaryBucket' }
+        period: { $ref: '#/components/schemas/PeriodSummaryRange' }
+
+    NotificationUnreadCountResponse:
+      type: object
+      required: [unreadCount]
+      properties:
+        unreadCount:
+          type: integer
+          minimum: 0
+          maximum: 9999
+          description: |
+            Count of notifications for the authenticated user where
+            `readAt IS NULL`. Capped at 9999 — any true count of 9999 or
+            greater is returned as 9999.
+
     Transfer:
       type: object
       required:
@@ -1931,3 +2141,5 @@ tags:
     description: Money-movement rows scoped to a household account.
   - name: transfers
     description: Atomic paired-write money movement between two household accounts.
+  - name: notifications
+    description: Per-user notification surfaces (unread counts, list, mark-read).

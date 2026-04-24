@@ -1,277 +1,180 @@
-import { useMemo, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView } from 'react-native';
+// Home tab — orchestrates the Phase 4 layout. Matches the prototype
+// `components/screen-home.jsx` top-to-bottom:
+//   1. HomeHeader (avatar → settings, greeting, notification bell)
+//   2. BalanceHero (gradient card + eye + sparkline + period tiles)
+//   3. QuickActionsGrid (5 buttons)
+//   4. BudgetPlaceholder (Phase 6 placeholder)
+//   5. RecentActivity (segmented All / Income / Expenses, top-8)
+//
+// Quick actions open the Phase 3 bottom sheets via their imperative handles
+// (AddTransactionSheet.present({type}), TransferSheet.present()), which is
+// the existing external-open contract — no sheet extension required.
+
+import { useMemo, useRef } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { formatMoney, type Account, type Category } from '@nayanam/core';
+import { useQueryClient } from '@tanstack/react-query';
+import type { Account, Category } from '@nayanam/core';
 import { LIGHT } from '@nayanam/ui-tokens';
 import { useAuthStore } from '../../src/lib/api';
 import {
   useAccounts,
-  useAccountsSummary,
   useCategories,
-  useCreateHousehold,
+  useHomeStore,
   useHouseholds,
-  useLogout,
   useMe,
-  useTransactions,
 } from '../../src/lib/hooks';
-import { TransactionRow } from '../../src/features/transactions/TransactionRow';
+import {
+  AddTransactionSheet,
+  type AddTransactionSheetHandle,
+} from '../../src/features/transactions/AddTransactionSheet';
+import {
+  TransferSheet,
+  type TransferSheetHandle,
+} from '../../src/features/transactions/TransferSheet';
+import {
+  AddAccountSheet,
+  type AddAccountSheetHandle,
+} from '../../src/features/cards/AddAccountSheet';
+import { HomeHeader } from '../../src/features/home/HomeHeader';
+import { BalanceHero } from '../../src/features/home/BalanceHero';
+import { QuickActionsGrid } from '../../src/features/home/QuickActionsGrid';
+import { BudgetPlaceholder } from '../../src/features/home/BudgetPlaceholder';
+import { RecentActivity } from '../../src/features/home/RecentActivity';
 
-export default function Home() {
+export default function HomeTab() {
   const me = useMe();
-  const { data: households } = useHouseholds();
+  const { data: householdsData } = useHouseholds();
   const activeId = useAuthStore((s) => s.activeHouseholdId);
-  const setActive = useAuthStore((s) => s.setActiveHousehold);
-  const logout = useLogout();
-  const createHousehold = useCreateHousehold();
-  const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState('');
 
-  const list = households ?? me.data?.households ?? [];
-  const active = list.find((h) => h.id === activeId) ?? list[0];
-  const summaryQuery = useAccountsSummary();
-  const summary = summaryQuery.data;
-  const router = useRouter();
-
-  // Recent activity (top 5). Hydrate via the accounts + categories lookups
-  // the Transactions tab also uses.
-  const txnsQuery = useTransactions({ limit: 5 });
-  const recent = useMemo(
-    () => txnsQuery.data?.pages.flatMap((p) => p.items).slice(0, 5) ?? [],
-    [txnsQuery.data],
-  );
   const accountsQuery = useAccounts({ includeArchived: true });
-  const accountsById = useMemo(() => {
-    const m = new Map<string, Account>();
-    for (const p of accountsQuery.data?.pages ?? []) for (const a of p.items) m.set(a.id, a);
-    return m;
-  }, [accountsQuery.data]);
   const categoriesQuery = useCategories({ includeArchived: true });
-  const categoriesById = useMemo(() => {
-    const m = new Map<string, Category>();
-    for (const p of categoriesQuery.data?.pages ?? []) for (const c of p.items) m.set(c.id, c);
-    return m;
-  }, [categoriesQuery.data]);
+
+  const accounts: Account[] = useMemo(
+    () => accountsQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [accountsQuery.data],
+  );
+  const categories: Category[] = useMemo(
+    () => categoriesQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [categoriesQuery.data],
+  );
+
+  const households = householdsData ?? me.data?.households ?? [];
+  const activeHousehold =
+    households.find((h) => h.id === activeId) ?? households[0];
+
+  const role = activeHousehold?.role;
+  const canMutate = role !== 'VIEWER';
+  const hasActiveAccounts = accounts.some((a) => !a.archivedAt);
+  const lockReason = !canMutate
+    ? 'Viewers cannot create transactions.'
+    : !hasActiveAccounts
+      ? 'Add an account first.'
+      : undefined;
+  const canOpenTransactionSheets = canMutate && hasActiveAccounts;
+
+  const addSheetRef = useRef<AddTransactionSheetHandle>(null);
+  const transferSheetRef = useRef<TransferSheetHandle>(null);
+  const addAccountSheetRef = useRef<AddAccountSheetHandle>(null);
+
+  const openAdd = (type: 'EXPENSE' | 'INCOME') => {
+    if (!canOpenTransactionSheets) return;
+    addSheetRef.current?.present({ type });
+  };
+  const openTransfer = () => {
+    if (!canOpenTransactionSheets) return;
+    transferSheetRef.current?.present();
+  };
+
+  // Pull-to-refresh — strict-keys invalidation of exactly the six Home queries
+  // (spec §Mobile UX). Broad prefix invalidation was replaced because it also
+  // refetched unrelated cache entries (full transactions lists used by the
+  // Transactions tab, per-account detail queries, etc.).
+  //   1. ['accounts']
+  //   2. ['accounts', 'summary']
+  //   3. ['accounts', 'balance-history-all', 14]
+  //   4. ['transactions', 'period-summary', { period }]
+  //   5. ['transactions', { limit: 8, type? }] — the recent-activity list.
+  //      Segment (All/Income/Expenses) state lives inside RecentActivity,
+  //      so we match exactly the Home-shaped entries via a predicate that
+  //      keys on limit:8 in the normalized filter object. Only the Home
+  //      screen uses limit:8, so scope is preserved.
+  //   6. ['notifications', 'unread-count']
+  const qc = useQueryClient();
+  const period = useHomeStore((s) => s.period);
+  const refreshing =
+    me.isFetching ||
+    accountsQuery.isFetching ||
+    categoriesQuery.isFetching;
+
+  const onRefresh = () => {
+    void qc.invalidateQueries({ queryKey: ['accounts'] });
+    void qc.invalidateQueries({ queryKey: ['accounts', 'summary'] });
+    void qc.invalidateQueries({ queryKey: ['accounts', 'balance-history-all', 14] });
+    void qc.invalidateQueries({
+      queryKey: ['transactions', 'period-summary', { period }],
+    });
+    void qc.invalidateQueries({
+      predicate: (query) => {
+        const [root, filters] = query.queryKey;
+        return (
+          root === 'transactions' &&
+          typeof filters === 'object' &&
+          filters !== null &&
+          (filters as { limit?: number }).limit === 8
+        );
+      },
+    });
+    void qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-bg">
-      <ScrollView contentContainerStyle={{ padding: 24 }}>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <View className="h-9 w-9 items-center justify-center rounded-md bg-accent">
-              <Text className="font-bold text-white">N</Text>
-            </View>
-            <View>
-              <Text className="text-lg font-semibold text-text">Nayanam</Text>
-              <Text className="font-mono text-[10px] uppercase tracking-wider text-text-faint">
-                Expense manager
-              </Text>
-            </View>
-          </View>
-          <Pressable onPress={() => logout.mutate()}>
-            <Text className="text-sm text-text-dim">Sign out</Text>
-          </Pressable>
-        </View>
-
-        {/* Balance hero — per-currency buckets joined with ' · ' (spec). */}
-        <View
-          style={{
-            marginTop: 24,
-            borderRadius: 24,
-            padding: 20,
-            backgroundColor: LIGHT.text,
+    <SafeAreaView style={{ flex: 1, backgroundColor: LIGHT.bg }} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <HomeHeader me={me.data} />
+        <BalanceHero activeHousehold={activeHousehold} />
+        <QuickActionsGrid
+          canMutate={canOpenTransactionSheets}
+          lockReason={lockReason}
+          onAddExpense={() => openAdd('EXPENSE')}
+          onAddIncome={() => openAdd('INCOME')}
+          onTransfer={openTransfer}
+        />
+        <BudgetPlaceholder />
+        <RecentActivity
+          accounts={accounts}
+          categories={categories}
+          onAddFirst={() => {
+            if (canOpenTransactionSheets) {
+              openAdd('EXPENSE');
+            } else if (canMutate && !hasActiveAccounts) {
+              addAccountSheetRef.current?.present();
+            }
           }}
-        >
-          <Text
-            style={{
-              fontSize: 11,
-              letterSpacing: 1,
-              fontFamily: 'Geist Mono',
-              color: 'rgba(255,255,255,0.7)',
-            }}
-          >
-            TOTAL BALANCE
-          </Text>
-          <Text
-            style={{
-              color: '#fff',
-              fontSize: 32,
-              fontWeight: '700',
-              marginTop: 6,
-              letterSpacing: -0.8,
-            }}
-            numberOfLines={2}
-          >
-            {summaryQuery.isLoading
-              ? '—'
-              : summary && summary.byCurrency.length > 0
-                ? summary.byCurrency
-                    .map((b) => formatMoney(b.totalMinor, b.currencyCode))
-                    .join(' · ')
-                : 'No accounts yet'}
-          </Text>
-          <Text
-            style={{
-              color: 'rgba(255,255,255,0.6)',
-              fontSize: 12,
-              marginTop: 6,
-              fontFamily: 'Geist Mono',
-            }}
-          >
-            {summary ? `${summary.totalAccounts} active` : ''}
-          </Text>
-        </View>
-
-        <View className="mt-8 rounded-lg border border-border bg-surface p-6">
-          <Text className="text-2xl font-semibold text-text">
-            {me.data?.user?.name
-              ? `Welcome back, ${me.data.user.name}.`
-              : `Welcome, ${me.data?.user?.email ?? '...'}.`}
-          </Text>
-          <Text className="mt-2 text-sm text-text-dim">
-            Phase 1 is live: auth and households. Domain features land next.
-          </Text>
-
-          <Text className="mt-6 mb-2 font-mono text-[10px] uppercase tracking-wider text-text-faint">
-            Active household
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {list.map((h) => {
-              const isActive = h.id === active?.id;
-              return (
-                <Pressable
-                  key={h.id}
-                  onPress={() => setActive(h.id)}
-                  className={
-                    'rounded-full border px-3 py-1 ' +
-                    (isActive
-                      ? 'border-accent bg-accent-soft'
-                      : 'border-border')
-                  }
-                >
-                  <Text className={isActive ? 'text-accent' : 'text-text'}>
-                    {h.name}{' '}
-                    <Text className="font-mono text-[10px] text-text-dim">{h.role}</Text>
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => setShowCreate((v) => !v)}
-              className="rounded-full border border-dashed border-border px-3 py-1"
-            >
-              <Text className="text-text-dim">+ New</Text>
-            </Pressable>
+        />
+        {me.isLoading && !me.data ? (
+          <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+            <ActivityIndicator color={LIGHT.textDim} />
           </View>
-
-          {showCreate && (
-            <View className="mt-3 flex-row gap-2">
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="Household name"
-                className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-text"
-                placeholderTextColor="rgba(14,14,16,0.4)"
-              />
-              <Pressable
-                onPress={() =>
-                  name.trim() &&
-                  createHousehold.mutate(
-                    { name: name.trim() },
-                    {
-                      onSuccess: (hh) => {
-                        setActive(hh.id);
-                        setName('');
-                        setShowCreate(false);
-                      },
-                    },
-                  )
-                }
-                className="justify-center rounded-md bg-accent px-4"
-              >
-                <Text className="text-white">Create</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Recent activity — top 5, matches prototype Home activity list */}
-        <View style={{ marginTop: 24 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 6,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 11,
-                color: LIGHT.textFaint,
-                fontFamily: 'Geist Mono',
-                letterSpacing: 0.6,
-              }}
-            >
-              RECENT ACTIVITY
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="See all transactions"
-              onPress={() => router.push('/(tabs)/transactions')}
-            >
-              <Text style={{ color: LIGHT.textDim, fontSize: 13 }}>See all</Text>
-            </Pressable>
-          </View>
-
-          {txnsQuery.isLoading ? (
-            <Text style={{ color: LIGHT.textDim, paddingVertical: 12 }}>Loading…</Text>
-          ) : recent.length === 0 ? (
-            <View
-              style={{
-                padding: 18,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: LIGHT.border,
-                backgroundColor: LIGHT.surface,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: LIGHT.textDim, fontSize: 13 }}>
-                No transactions yet.
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={{
-                borderRadius: 16,
-                backgroundColor: LIGHT.surface,
-                borderWidth: 1,
-                borderColor: LIGHT.border,
-                paddingHorizontal: 14,
-              }}
-            >
-              {recent.map((t, idx) => (
-                <View
-                  key={t.id}
-                  style={{
-                    borderBottomWidth: idx < recent.length - 1 ? 0.5 : 0,
-                    borderBottomColor: LIGHT.border,
-                  }}
-                >
-                  <TransactionRow
-                    transaction={t}
-                    account={accountsById.get(t.accountId)}
-                    category={categoriesById.get(t.categoryId)}
-                    compact
-                    onPress={() => router.push('/(tabs)/transactions')}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+        ) : null}
       </ScrollView>
+
+      <AddTransactionSheet ref={addSheetRef} />
+      <TransferSheet ref={transferSheetRef} />
+      <AddAccountSheet
+        ref={addAccountSheetRef}
+        defaultCurrencyCode={activeHousehold?.defaultCurrencyCode ?? 'USD'}
+      />
     </SafeAreaView>
   );
 }

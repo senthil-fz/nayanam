@@ -98,6 +98,59 @@ export class BalanceService {
   }
 
   /**
+   * Trailing `days` balance points for a single account, bucketed daily,
+   * oldest→newest. Past days use UTC end-of-day (23:59:59.999Z) as `asOf`;
+   * the current UTC day uses `now()` so the last bar reflects real-time
+   * balance (mirrors Phase 2's monthly convention).
+   *
+   * Deliberately a sibling of `balanceHistory(months)` rather than a unit
+   * parameter on the existing method. Phase 2's monthly callers on web and
+   * mobile are already shipped; keeping the monthly signature stable avoids
+   * a cross-surface refactor. The SQL body is identical modulo the asOf
+   * bucket generator.
+   */
+  async balanceHistoryDaily(accountId: string, days: number): Promise<BalanceHistoryPoint[]> {
+    const acct = await this.prisma.account.findUnique({ where: { id: accountId } });
+    if (!acct) return [];
+
+    const now = new Date();
+    const points: BalanceHistoryPoint[] = [];
+
+    // Build bucket cutoffs oldest → newest. The final bucket is the current
+    // UTC day (asOf = now()); walk backward `days - 1` days from there using
+    // UTC end-of-day as `asOf`.
+    const todayStart = startOfDayUTC(now);
+    const cutoffs: Array<{ bucket: string; asOf: Date; isCurrent: boolean }> = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const dayStart = addDaysUTC(todayStart, -i);
+      const isCurrent = i === 0;
+      const bucket = toISODate(dayStart);
+      const asOf = isCurrent ? now : endOfDayUTC(dayStart);
+      cutoffs.push({ bucket, asOf, isCurrent });
+    }
+
+    for (const { bucket, asOf } of cutoffs) {
+      if (asOf < acct.openingBalanceAt) {
+        points.push({
+          bucket,
+          asOf: asOf.toISOString(),
+          balanceMinor: acct.openingBalanceMinor.toString(),
+        });
+        continue;
+      }
+      const sum = await this.sumTransactions(this.prisma, accountId, acct.openingBalanceAt, asOf);
+      const balance = acct.openingBalanceMinor + sum;
+      points.push({
+        bucket,
+        asOf: asOf.toISOString(),
+        balanceMinor: balance.toString(),
+      });
+    }
+
+    return points;
+  }
+
+  /**
    * Trailing `months` balance points, oldest→newest. Each past month uses
    * UTC end-of-month as `asOf`; the current month uses `now()`.
    */
@@ -219,4 +272,23 @@ function endOfMonthUTC(d: Date): Date {
   const m = d.getUTCMonth();
   const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   return new Date(Date.UTC(y, m, lastDay, 23, 59, 59, 999));
+}
+
+/** Start of `d`'s UTC day, i.e. 00:00:00.000Z. */
+function startOfDayUTC(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+}
+
+/** End of `d`'s UTC day, i.e. 23:59:59.999Z. */
+function endOfDayUTC(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
+function addDaysUTC(d: Date, n: number): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n, 0, 0, 0, 0));
+}
+
+/** "YYYY-MM-DD" UTC date key. */
+function toISODate(d: Date): string {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }

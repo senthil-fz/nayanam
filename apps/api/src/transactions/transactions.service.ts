@@ -438,6 +438,117 @@ export class TransactionsService {
     return toDTO(updated);
   }
 
+  // ---- aggregates (Phase 4) ----
+
+  /**
+   * Period income/expense/net/count, per currency, for the household. Excludes
+   * TRANSFER pair-rows (transfer_id IS NOT NULL OR type = 'TRANSFER') and
+   * soft-deleted rows. Any role may call.
+   *
+   * Precedence per Phase 4 spec §4: if both `period` and `from`/`to` are
+   * supplied the server rejects with VALIDATION_ERROR; if neither is given,
+   * defaults to `period=month`.
+   */
+  async periodSummary(q: {
+    period?: 'day' | 'week' | 'month' | 'year';
+    from?: string;
+    to?: string;
+  }): Promise<{
+    byCurrency: Array<{
+      currencyCode: string;
+      incomeMinor: string;
+      expenseMinor: string;
+      netMinor: string;
+      transactionCount: number;
+    }>;
+    period: { from: string; to: string };
+  }> {
+    const householdId = getHouseholdOrThrow();
+
+    const hasPeriod = q.period !== undefined;
+    const hasFromTo = q.from !== undefined || q.to !== undefined;
+    if (hasPeriod && hasFromTo) {
+      throw Errors.validation(
+        'Specify either `period` or `from`+`to`, not both.',
+      );
+    }
+
+    let from: Date;
+    let to: Date;
+    if (hasFromTo) {
+      if (!q.from || !q.to) {
+        throw Errors.validation('`from` and `to` must be supplied together.');
+      }
+      from = new Date(q.from);
+      to = new Date(q.to);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw Errors.validation('Invalid `from` or `to` datetime.');
+      }
+      if (!(from < to)) {
+        throw Errors.validation('`from` must be strictly before `to`.');
+      }
+      const nowPlusSkew = Date.now() + 60_000;
+      if (to.getTime() > nowPlusSkew) {
+        throw Errors.validation('`to` must not exceed now()+1min.');
+      }
+      const span = to.getTime() - from.getTime();
+      if (span > 366 * 24 * 60 * 60 * 1000) {
+        throw Errors.validation('Custom range span must be ≤ 366 days.');
+      }
+    } else {
+      const now = new Date();
+      const period = q.period ?? 'month';
+      from = startOfPeriodUTC(now, period);
+      to = now;
+    }
+
+    type Row = {
+      currency_code: string;
+      income_minor: bigint;
+      expense_minor: bigint;
+      transaction_count: number;
+    };
+    const rows = await this.prisma.$queryRaw<Row[]>`
+      SELECT
+        currency_code,
+        COALESCE(SUM(amount_minor) FILTER (
+          WHERE type = 'INCOME'  AND deleted_at IS NULL AND transfer_id IS NULL
+        ), 0)::bigint AS income_minor,
+        COALESCE(SUM(amount_minor) FILTER (
+          WHERE type = 'EXPENSE' AND deleted_at IS NULL AND transfer_id IS NULL
+        ), 0)::bigint AS expense_minor,
+        COALESCE(COUNT(*) FILTER (
+          WHERE deleted_at IS NULL AND transfer_id IS NULL AND type IN ('INCOME','EXPENSE')
+        ), 0)::int AS transaction_count
+      FROM transactions
+      WHERE household_id = ${householdId}
+        AND occurred_at >= ${from}
+        AND occurred_at <  ${to}
+      GROUP BY currency_code
+      ORDER BY currency_code ASC
+    `;
+
+    const byCurrency = rows
+      // Drop currencies where the group is all-transfers (count=0, sums=0).
+      .filter((r) => r.transaction_count > 0 || r.income_minor !== 0n || r.expense_minor !== 0n)
+      .map((r) => {
+        const income = r.income_minor;
+        const expense = r.expense_minor;
+        return {
+          currencyCode: r.currency_code,
+          incomeMinor: income.toString(),
+          expenseMinor: expense.toString(),
+          netMinor: (income - expense).toString(),
+          transactionCount: Number(r.transaction_count),
+        };
+      });
+
+    return {
+      byCurrency,
+      period: { from: from.toISOString(), to: to.toISOString() },
+    };
+  }
+
   // ---- helpers ----
 
   async findOrThrow(id: string): Promise<TransactionRow> {
@@ -484,6 +595,33 @@ type TransactionRawRow = {
 function toArray(v: string | string[] | undefined): string[] {
   if (v === undefined) return [];
   return Array.isArray(v) ? v : [v];
+}
+
+/**
+ * Start-of-period instant in UTC for the named windows. Matches Phase 4 spec:
+ * - day   → today 00:00Z
+ * - week  → this ISO-week Monday 00:00Z
+ * - month → first-of-month 00:00Z
+ * - year  → Jan 1 00:00Z
+ */
+function startOfPeriodUTC(now: Date, period: 'day' | 'week' | 'month' | 'year'): Date {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  switch (period) {
+    case 'day':
+      return new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+    case 'month':
+      return new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+    case 'year':
+      return new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    case 'week': {
+      // ISO week: Monday-start. getUTCDay: 0=Sun..6=Sat; Monday offset = (dow+6)%7.
+      const dow = now.getUTCDay();
+      const mondayOffset = (dow + 6) % 7;
+      return new Date(Date.UTC(y, m, d - mondayOffset, 0, 0, 0, 0));
+    }
+  }
 }
 
 function normalizeNote(n: string | null | undefined): string | null {

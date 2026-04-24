@@ -89,6 +89,10 @@ export const BalanceHistoryQuerySchema = z.object({
   months: z.coerce.number().int().min(1).max(24).optional(),
 });
 
+export const BalanceHistoryAllQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).optional(),
+});
+
 export type AccountDTO = {
   id: string;
   householdId: string;

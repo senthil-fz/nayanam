@@ -76,6 +76,43 @@ export const BulkCreateTransactionsInput = z.object({
 });
 export type BulkCreateTransactionsInputType = z.infer<typeof BulkCreateTransactionsInput>;
 
+// ─────────────────────────── Phase 4 period summary ───────────────────────────
+
+export const HomePeriodEnum = z.enum(['day', 'week', 'month', 'year']);
+export type HomePeriodType = z.infer<typeof HomePeriodEnum>;
+
+const SignedMinorString = z
+  .string()
+  .regex(/^-?\d+$/, 'must be a signed integer as a string');
+
+export const PeriodSummaryBucket = z.object({
+  currencyCode: CurrencyCode,
+  incomeMinor: SignedMinorString,
+  expenseMinor: SignedMinorString,
+  netMinor: SignedMinorString,
+  transactionCount: z.number().int().nonnegative(),
+});
+export type PeriodSummaryBucketType = z.infer<typeof PeriodSummaryBucket>;
+
+export const PeriodSummaryRange = z.object({
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+});
+export type PeriodSummaryRangeType = z.infer<typeof PeriodSummaryRange>;
+
+export const PeriodSummaryResponse = z.object({
+  byCurrency: z.array(PeriodSummaryBucket),
+  period: PeriodSummaryRange,
+});
+export type PeriodSummaryResponseType = z.infer<typeof PeriodSummaryResponse>;
+
+export const PeriodSummaryQuery = z.object({
+  period: HomePeriodEnum.optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+export type PeriodSummaryQueryType = z.infer<typeof PeriodSummaryQuery>;
+
 // ─────────────────────────── Transfer ───────────────────────────
 
 export const TransferSchema = z.object({
