@@ -263,4 +263,58 @@ export const Errors = {
     new AppError('BUDGET_ALREADY_PAUSED', 'Budget is already paused.', HttpStatus.CONFLICT),
   budgetAlreadyActive: () =>
     new AppError('BUDGET_ALREADY_ACTIVE', 'Budget is already active.', HttpStatus.CONFLICT),
+  // --- Attachments (Phase 8) ---
+  attachmentMimeNotAllowed: (mime: string) =>
+    new AppError(
+      'ATTACHMENT_MIME_NOT_ALLOWED',
+      `MIME type "${mime}" is not allowed.`,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      { mime },
+    ),
+  attachmentTooLarge: (details?: Record<string, unknown>) =>
+    new AppError(
+      'ATTACHMENT_TOO_LARGE',
+      'Attachment exceeds the size cap for its MIME type.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  attachmentOwnerNotFound: () =>
+    new AppError(
+      'ATTACHMENT_OWNER_NOT_FOUND',
+      'Owner row not found in this household.',
+      HttpStatus.NOT_FOUND,
+    ),
+  attachmentFinalizeFailed: (details?: Record<string, unknown>) =>
+    new AppError(
+      'ATTACHMENT_FINALIZE_FAILED',
+      'Finalize failed: object not found in storage.',
+      HttpStatus.CONFLICT,
+      details,
+    ),
+  attachmentSizeMismatch: (details?: Record<string, unknown>) =>
+    new AppError(
+      'ATTACHMENT_SIZE_MISMATCH',
+      'Uploaded object size does not match the declared size.',
+      HttpStatus.CONFLICT,
+      details,
+    ),
+  attachmentAlreadyFinalized: () =>
+    new AppError(
+      'ATTACHMENT_ALREADY_FINALIZED',
+      'Attachment has already been finalized.',
+      HttpStatus.CONFLICT,
+    ),
+  attachmentNotRestorable: () =>
+    new AppError(
+      'ATTACHMENT_NOT_RESTORABLE',
+      'Attachment cannot be restored (past the 24h window or object missing).',
+      HttpStatus.CONFLICT,
+    ),
+  storageUnavailable: (details?: Record<string, unknown>) =>
+    new AppError(
+      'STORAGE_UNAVAILABLE',
+      'Object storage is temporarily unavailable.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+      details,
+    ),
 };

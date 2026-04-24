@@ -18,6 +18,7 @@
     "./bills": "./src/bills/index.ts",
     "./budgets": "./src/budgets/index.ts",
     "./notifications": "./src/notifications/index.ts",
+    "./attachments": "./src/attachments/index.ts",
     "./stats": "./src/stats/index.ts"
   },
   "scripts": {

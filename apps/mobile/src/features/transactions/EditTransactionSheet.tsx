@@ -31,9 +31,13 @@ import {
   UpdateTransactionInput,
   type UpdateTransactionInputType,
   type Account,
+  type Attachment,
   type Category,
   type Transaction,
 } from '@nayanam/core';
+import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { AttachmentStrip } from '../attachments/AttachmentStrip';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import {
   useAccounts,
@@ -63,6 +67,28 @@ export const EditTransactionSheet = forwardRef<EditTransactionSheetHandle>(
     const accountSheetRef = useRef<AccountPickerSheetHandle>(null);
     const categorySheetRef = useRef<CategoryPickerSheetHandle>(null);
     const snapPoints = useMemo(() => ['92%'], []);
+    const router = useRouter();
+
+    const onPreviewAttachment = useCallback(
+      (a: Attachment) => {
+        if (a.mime === 'application/pdf') {
+          if (a.downloadUrl) {
+            void WebBrowser.openBrowserAsync(a.downloadUrl);
+          }
+          return;
+        }
+        if (!a.downloadUrl) return;
+        router.push({
+          pathname: '/attachments/preview',
+          params: {
+            url: a.downloadUrl,
+            filename: a.originalFilename,
+            mime: a.mime,
+          },
+        });
+      },
+      [router],
+    );
 
     const [tx, setTx] = useState<Transaction | null>(null);
     const [account, setAccount] = useState<Account | null>(null);
@@ -309,6 +335,18 @@ export const EditTransactionSheet = forwardRef<EditTransactionSheetHandle>(
                   )}
                 />
               </Field>
+
+              {tx && !isTransfer ? (
+                <View style={{ marginTop: 14 }}>
+                  <AttachmentStrip
+                    mode="live"
+                    ownerType="transaction"
+                    ownerId={tx.id}
+                    canMutate={!isDeleted}
+                    onPreview={onPreviewAttachment}
+                  />
+                </View>
+              ) : null}
 
               {isDeleted ? (
                 <Pressable

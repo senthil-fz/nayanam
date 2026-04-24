@@ -18,6 +18,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { BillsModule } from './bills/bills.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { StatsModule } from './stats/stats.module';
+import { StorageModule } from './storage/storage.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 
 @Module({
@@ -36,6 +38,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     ScheduleModule.forRoot(),
     PrismaModule,
+    StorageModule,
     MailModule,
     AuthModule,
     MeModule,
@@ -48,6 +51,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
     BillsModule,
     BudgetsModule,
     StatsModule,
+    AttachmentsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -2,7 +2,7 @@
 // INCOME / EXPENSE only — transfers go through TransferDialog.
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import {
@@ -14,6 +14,9 @@ import {
 import { useCreateTransaction } from '../../lib/hooks';
 import { Dialog } from '../../components/Dialog';
 import { majorToMinorString } from '../cards/AccountForm';
+import { AttachmentStrip } from '../attachments/AttachmentStrip';
+import { useAttachmentUpload } from '../attachments/useAttachmentUpload';
+import { useToast } from '../../components/Toast';
 
 type Props = {
   open: boolean;
@@ -56,6 +59,21 @@ export function AddTransactionDialog({
   prefill,
 }: Props) {
   const create = useCreateTransaction();
+  const { upload } = useAttachmentUpload();
+  const toast = useToast();
+  // Adjusting state while rendering — state keyed to the `open` transition.
+  // When `open` flips we store it and reset the staged queue + counter. This
+  // avoids react-hooks/set-state-in-effect without reaching for refs.
+  const [lastOpen, setLastOpen] = useState(open);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  const [attachingCount, setAttachingCount] = useState(0);
+  if (lastOpen !== open) {
+    setLastOpen(open);
+    if (open) {
+      setStagedFiles([]);
+      setAttachingCount(0);
+    }
+  }
   const activeAccounts = useMemo(
     () => accounts.filter((a) => !a.archivedAt),
     [accounts],
@@ -125,9 +143,42 @@ export function AddTransactionDialog({
       note: values.note.trim() ? values.note.trim() : null,
     });
     create.mutate(payload, {
-      onSuccess: () => {
-        form.reset();
-        onClose();
+      onSuccess: (txn) => {
+        // Per Phase 8: create-first-then-attach. Upload any staged files
+        // against the freshly minted transactionId, serialized to keep the
+        // UX predictable and avoid hammering the presign endpoint.
+        const filesToUpload = stagedFiles.slice();
+        const closeAndReset = () => {
+          form.reset();
+          setStagedFiles([]);
+          setAttachingCount(0);
+          onClose();
+        };
+        if (filesToUpload.length === 0) {
+          closeAndReset();
+          return;
+        }
+        setAttachingCount(filesToUpload.length);
+        void (async () => {
+          for (const file of filesToUpload) {
+            try {
+              await upload({
+                file,
+                ownerType: 'transaction',
+                ownerId: txn.id,
+              });
+            } catch (e) {
+              const msg =
+                e instanceof Error
+                  ? e.message
+                  : 'Failed to upload an attachment.';
+              toast.show(msg, { tone: 'negative' });
+            } finally {
+              setAttachingCount((n) => Math.max(0, n - 1));
+            }
+          }
+          closeAndReset();
+        })();
       },
     });
   });
@@ -149,10 +200,14 @@ export function AddTransactionDialog({
           <button
             type="submit"
             form="add-tx-form"
-            disabled={create.isPending || !selectedAccount}
+            disabled={create.isPending || attachingCount > 0 || !selectedAccount}
             className="rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            {create.isPending ? 'Saving…' : 'Save transaction'}
+            {create.isPending
+              ? 'Saving…'
+              : attachingCount > 0
+                ? `Uploading ${attachingCount}…`
+                : 'Save transaction'}
           </button>
         </div>
       }
@@ -280,6 +335,13 @@ export function AddTransactionDialog({
             className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
           />
         </label>
+
+        <AttachmentStrip
+          mode="staged"
+          ownerType="transaction"
+          stagedFiles={stagedFiles}
+          onStagedChange={setStagedFiles}
+        />
 
         {create.isError ? (
           <p className="text-sm text-[var(--color-negative)]">

@@ -1,0 +1,106 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-008-phase-8-attachments
+      author: nayanam
+      comment: |
+        Phase 8 — attachments table. Polymorphic owner (owner_type + owner_id);
+        v1 restricts owner_type to 'transaction' via CHECK (extended in later
+        phases). Status enum PENDING -> READY / FAILED enforced via CHECK.
+        MIME allowlist enforced via CHECK. Soft-delete; restore bounded to 24h
+        at the service layer (object reaper handles abandoned PENDING rows).
+        Unique (key) pins one row per S3 object.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: attachments
+      changes:
+        - createTable:
+            tableName: attachments
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_attachments_household
+                    references: households(id)
+                    deleteCascade: true
+              - column: { name: owner_type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: owner_id, type: VARCHAR(26), constraints: { nullable: false } }
+              - column: { name: key, type: TEXT, constraints: { nullable: false } }
+              - column: { name: mime, type: TEXT, constraints: { nullable: false } }
+              - column: { name: size, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: original_filename, type: TEXT, constraints: { nullable: false } }
+              - column: { name: thumb_key, type: TEXT }
+              - column: { name: width, type: INT }
+              - column: { name: height, type: INT }
+              - column: { name: status, type: TEXT, defaultValue: 'PENDING', constraints: { nullable: false } }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_attachments_created_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+        - sql:
+            sql: |
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_owner_type
+                  CHECK (owner_type IN ('transaction'));
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_status
+                  CHECK (status IN ('PENDING', 'READY', 'FAILED'));
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_mime
+                  CHECK (mime IN ('image/jpeg','image/png','image/heic','image/webp','application/pdf'));
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_size_positive
+                  CHECK (size > 0);
+        - addUniqueConstraint:
+            tableName: attachments
+            columnNames: key
+            constraintName: uq_attachments_key
+        - createIndex:
+            tableName: attachments
+            indexName: idx_attachments_owner
+            columns:
+              - column: { name: household_id }
+              - column: { name: owner_type }
+              - column: { name: owner_id }
+        - createIndex:
+            tableName: attachments
+            indexName: idx_attachments_household_created
+            columns:
+              - column: { name: household_id }
+              - column: { name: created_at, descending: true }
+        - createIndex:
+            tableName: attachments
+            indexName: idx_attachments_created_by
+            columns:
+              - column: { name: created_by }
+      rollback:
+        - dropIndex:
+            tableName: attachments
+            indexName: idx_attachments_created_by
+        - dropIndex:
+            tableName: attachments
+            indexName: idx_attachments_household_created
+        - dropIndex:
+            tableName: attachments
+            indexName: idx_attachments_owner
+        - dropUniqueConstraint:
+            tableName: attachments
+            constraintName: uq_attachments_key
+        - sql:
+            sql: |
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_size_positive;
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_mime;
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_status;
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_owner_type;
+        - dropTable:
+            tableName: attachments

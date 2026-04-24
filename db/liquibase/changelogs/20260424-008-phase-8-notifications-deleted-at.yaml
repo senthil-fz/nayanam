@@ -1,0 +1,48 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-008-phase-8-notifications-deleted-at
+      author: nayanam
+      comment: |
+        Phase 8 — add soft-delete to notifications and replace the Phase 4
+        (user_id, read_at) index with partial variants that exclude deleted
+        rows. Also add (user_id, created_at DESC, id DESC) partial index to
+        support the list-sort used by the new /notifications endpoint.
+      preConditions:
+        - onFail: MARK_RAN
+        - and:
+            - tableExists:
+                tableName: notifications
+            - not:
+                - columnExists:
+                    tableName: notifications
+                    columnName: deleted_at
+      changes:
+        - addColumn:
+            tableName: notifications
+            columns:
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+        - dropIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_read
+        - sql:
+            sql: |
+              CREATE INDEX idx_notifications_unread_live
+                ON notifications (user_id, read_at)
+                WHERE deleted_at IS NULL;
+              CREATE INDEX idx_notifications_user_created_live
+                ON notifications (user_id, created_at DESC, id DESC)
+                WHERE deleted_at IS NULL;
+      rollback:
+        - sql:
+            sql: |
+              DROP INDEX IF EXISTS idx_notifications_user_created_live;
+              DROP INDEX IF EXISTS idx_notifications_unread_live;
+        - createIndex:
+            tableName: notifications
+            indexName: idx_notifications_user_read
+            columns:
+              - column: { name: user_id }
+              - column: { name: read_at }
+        - dropColumn:
+            tableName: notifications
+            columnName: deleted_at

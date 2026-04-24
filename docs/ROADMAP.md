@@ -146,10 +146,10 @@ Maps to prototype "Stats" screen.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-801 | `Attachment` table + S3 signed upload/download endpoints + MIME/size validation | api | todo | |
-| F-802 | Attach receipts to transactions (file picker / camera roll / camera capture on mobile) | web, mobile | todo | |
-| F-803 | `Notification` table + list/mark-read endpoints | api | todo | |
-| F-804 | In-app notification center (bell from Home): list, unread badge, tap-through to source entity | web, mobile | todo | |
+| F-801 | `Attachment` table + S3 signed upload/download endpoints + MIME/size validation | api | shipped | [spec](specs/2026-04-24-phase-8-attachments-notifications.md) |
+| F-802 | Attach receipts to transactions (file picker / camera roll / camera capture on mobile) | web, mobile | shipped | [spec](specs/2026-04-24-phase-8-attachments-notifications.md) — create-first-then-attach sequencing; image thumbnails via sharp |
+| F-803 | `Notification` table + list/mark-read endpoints | api | shipped | [spec](specs/2026-04-24-phase-8-attachments-notifications.md) — Phase 4 table extended with `deleted_at`; list/mark-read/mark-all/delete endpoints added |
+| F-804 | In-app notification center (bell from Home): list, unread badge, tap-through to source entity | web, mobile | shipped | [spec](specs/2026-04-24-phase-8-attachments-notifications.md) — shared `resolveNotificationRoute` helper unifies push + in-app tap-through |
 
 ## Phase 9 — Settings
 

@@ -30,6 +30,7 @@ model User {
   notifications      Notification[]
   idempotencyKeys    IdempotencyKey[]
   eventsActed        Event[]             @relation("EventActor")
+  attachmentsCreated Attachment[]        @relation("AttachmentCreatedBy")
 
   @@map("users")
 }
@@ -87,6 +88,7 @@ model Household {
   billPayments  BillPayment[]
   budgets       Budget[]
   budgetThresholdNotifications BudgetThresholdNotification[]
+  attachments   Attachment[]
 
   @@map("households")
 }
@@ -246,12 +248,12 @@ model Notification {
   payload     Json      @default("{}")
   readAt      DateTime? @map("read_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
   budgetThresholdNotifications BudgetThresholdNotification[]
 
-  @@index([userId, readAt], map: "idx_notifications_user_read")
   @@index([userId, createdAt(sort: Desc)], map: "idx_notifications_user_created")
   @@map("notifications")
 }
@@ -412,5 +414,32 @@ model BudgetThresholdNotification {
   @@unique([budgetId, periodStart, thresholdPercent], map: "ux_btn_budget_period_threshold")
   @@index([householdId, periodStart(sort: Desc)], map: "idx_btn_household_period")
   @@map("budget_threshold_notifications")
+}
+
+model Attachment {
+  id               String    @id @db.VarChar(26)
+  householdId      String    @map("household_id") @db.VarChar(26)
+  ownerType        String    @map("owner_type")
+  ownerId          String    @map("owner_id") @db.VarChar(26)
+  key              String    @unique(map: "uq_attachments_key")
+  mime             String
+  size             BigInt
+  originalFilename String    @map("original_filename")
+  thumbKey         String?   @map("thumb_key")
+  width            Int?
+  height           Int?
+  status           String    @default("PENDING")
+  createdBy        String    @map("created_by") @db.VarChar(26)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  uploader  User      @relation("AttachmentCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([householdId, ownerType, ownerId], map: "idx_attachments_owner")
+  @@index([householdId, createdAt(sort: Desc)], map: "idx_attachments_household_created")
+  @@index([createdBy], map: "idx_attachments_created_by")
+  @@map("attachments")
 }
 

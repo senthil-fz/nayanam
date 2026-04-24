@@ -1,5 +1,6 @@
 import {
   makeAccountHooks,
+  makeAttachmentHooks,
   makeAuthHooks,
   makeBillHooks,
   makeBudgetHooks,
@@ -39,7 +40,25 @@ export const {
   useReorderAccounts,
 } = makeAccountHooks(apiClient);
 
-export const { useUnreadNotificationCount } = makeNotificationHooks(apiClient);
+export const {
+  useUnreadNotificationCount,
+  useNotifications,
+  useNotification,
+  useMarkNotificationRead,
+  useMarkNotificationUnread,
+  useMarkAllNotificationsRead,
+  useDeleteNotification,
+} = makeNotificationHooks(apiClient);
+
+export const {
+  useAttachments,
+  useAttachment,
+  usePresignUpload,
+  useFinalizeAttachment,
+  useDeleteAttachment,
+  useRestoreAttachment,
+  useRefreshDownloadUrl,
+} = makeAttachmentHooks(apiClient);
 
 export const {
   useCategories,

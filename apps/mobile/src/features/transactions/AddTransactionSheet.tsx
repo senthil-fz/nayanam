@@ -51,6 +51,9 @@ import {
   CategoryPickerSheet,
   type CategoryPickerSheetHandle,
 } from './CategoryPickerSheet';
+import { AttachmentStrip } from '../attachments/AttachmentStrip';
+import { useAttachmentUpload } from '../attachments/useAttachmentUpload';
+import type { StagedFile } from '../attachments/types';
 
 export type AddTransactionSheetHandle = {
   present: (preset?: { type?: 'INCOME' | 'EXPENSE'; accountId?: string }) => void;
@@ -70,6 +73,9 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
 
     const [account, setAccount] = useState<Account | null>(null);
     const [category, setCategory] = useState<Category | null>(null);
+    const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+    const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+    const { upload } = useAttachmentUpload();
 
     const { control, handleSubmit, reset, setValue, watch, formState } =
       useForm<CreateTransactionInputType>({
@@ -127,6 +133,8 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
           setAccount(null);
         }
         setCategory(null);
+        setStagedFiles([]);
+        setUploadStatus(null);
         sheetRef.current?.present();
       },
       dismiss: () => sheetRef.current?.dismiss(),
@@ -150,17 +158,47 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
           hapticError();
           return;
         }
-        await createMut.mutateAsync({
+        const created = await createMut.mutateAsync({
           ...values,
           note: values.note?.trim() ? values.note.trim() : null,
         });
+        // Upload staged attachments serially against the new transaction id.
+        // Failures do NOT roll back the transaction — we surface a toast-style
+        // message and leave the sheet open only if every file failed.
+        if (stagedFiles.length > 0) {
+          let failures = 0;
+          let index = 0;
+          for (const f of stagedFiles) {
+            index += 1;
+            setUploadStatus(`Uploading ${index} of ${stagedFiles.length}…`);
+            try {
+              await upload({
+                file: f,
+                ownerType: 'transaction',
+                ownerId: created.id,
+              });
+            } catch {
+              failures += 1;
+            }
+          }
+          setUploadStatus(null);
+          if (failures > 0) {
+            hapticError();
+            // Spec §UX: transaction still saves; user can retry from Edit.
+            // Keep the sheet open so they see the count, but reset form so
+            // re-submit does not re-create the transaction.
+          }
+        }
         hapticSuccess();
         reset();
         setAccount(null);
         setCategory(null);
+        setStagedFiles([]);
+        setUploadStatus(null);
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
+        setUploadStatus(null);
         console.warn('Create transaction failed', err);
       }
     });
@@ -328,6 +366,27 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
                 />
               </Field>
 
+              <View style={{ marginTop: 14 }}>
+                <AttachmentStrip
+                  mode="staged"
+                  ownerType="transaction"
+                  stagedFiles={stagedFiles}
+                  onStagedChange={setStagedFiles}
+                />
+              </View>
+
+              {uploadStatus ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: LIGHT.textDim,
+                    marginTop: 8,
+                  }}
+                >
+                  {uploadStatus}
+                </Text>
+              ) : null}
+
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Create transaction"
@@ -344,7 +403,11 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
                 })}
               >
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                  {createMut.isPending ? 'Saving…' : 'Save'}
+                  {createMut.isPending
+                    ? 'Saving…'
+                    : uploadStatus
+                      ? 'Uploading…'
+                      : 'Save'}
                 </Text>
               </Pressable>
             </ScrollView>

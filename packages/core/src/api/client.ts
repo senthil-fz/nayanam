@@ -47,6 +47,21 @@ type PeriodSummaryResponse = ApiSchemas['PeriodSummaryResponse'];
 type PeriodEnum = ApiSchemas['PeriodEnum'];
 type NotificationUnreadCountResponse =
   ApiSchemas['NotificationUnreadCountResponse'];
+type Notification = ApiSchemas['Notification'];
+type NotificationsPage = ApiSchemas['NotificationsPage'];
+type NotificationCategory = ApiSchemas['NotificationCategory'];
+type MarkAllNotificationsReadInput =
+  ApiSchemas['MarkAllNotificationsReadInput'];
+type MarkAllNotificationsReadResponse =
+  ApiSchemas['MarkAllNotificationsReadResponse'];
+
+type Attachment = ApiSchemas['Attachment'];
+type AttachmentOwnerType = ApiSchemas['AttachmentOwnerType'];
+type AttachmentListResponse = ApiSchemas['AttachmentListResponse'];
+type AttachmentDownloadUrlResponse =
+  ApiSchemas['AttachmentDownloadUrlResponse'];
+type PresignUploadInput = ApiSchemas['PresignUploadInput'];
+type PresignUploadResponse = ApiSchemas['PresignUploadResponse'];
 
 type StatsPeriodKind = ApiSchemas['StatsPeriodKind'];
 type StatsOverviewResponse = ApiSchemas['StatsOverviewResponse'];
@@ -385,6 +400,76 @@ export function createApiClient(opts: ApiClientOptions) {
     getNotificationUnreadCount: () =>
       request<NotificationUnreadCountResponse>('/notifications/unread-count', {
         crossHousehold: true,
+      }),
+    listNotifications: (params?: {
+      cursor?: string;
+      limit?: number;
+      unreadOnly?: boolean;
+      category?: NotificationCategory;
+    }) =>
+      request<NotificationsPage>('/notifications', {
+        crossHousehold: true,
+        query: params,
+      }),
+    getNotification: (id: string) =>
+      request<Notification>(`/notifications/${id}`, { crossHousehold: true }),
+    markNotificationRead: (id: string, idempotencyKey?: string) =>
+      request<Notification>(`/notifications/${id}/mark-read`, {
+        method: 'POST',
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    markNotificationUnread: (id: string, idempotencyKey?: string) =>
+      request<Notification>(`/notifications/${id}/mark-unread`, {
+        method: 'POST',
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    markAllNotificationsRead: (
+      body: MarkAllNotificationsReadInput,
+      idempotencyKey?: string,
+    ) =>
+      request<MarkAllNotificationsReadResponse>(
+        '/notifications/mark-all-read',
+        { method: 'POST', body, idempotencyKey, crossHousehold: true },
+      ),
+    deleteNotification: (id: string, idempotencyKey?: string) =>
+      request<void>(`/notifications/${id}`, {
+        method: 'DELETE',
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+
+    // Attachments (household-scoped)
+    presignUploadAttachment: (body: PresignUploadInput, idempotencyKey?: string) =>
+      request<PresignUploadResponse>('/attachments/presign-upload', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    finalizeAttachment: (id: string, idempotencyKey?: string) =>
+      request<Attachment>(`/attachments/${id}/finalize`, {
+        method: 'POST',
+        idempotencyKey,
+      }),
+    listAttachments: (params: {
+      ownerType: AttachmentOwnerType;
+      ownerId: string;
+      includeFailed?: boolean;
+      includeDeleted?: boolean;
+    }) => request<AttachmentListResponse>('/attachments', { query: params }),
+    getAttachment: (id: string) => request<Attachment>(`/attachments/${id}`),
+    refreshAttachmentDownloadUrl: (id: string) =>
+      request<AttachmentDownloadUrlResponse>(`/attachments/${id}/download-url`),
+    deleteAttachment: (id: string, idempotencyKey?: string) =>
+      request<void>(`/attachments/${id}`, {
+        method: 'DELETE',
+        idempotencyKey,
+      }),
+    restoreAttachment: (id: string, idempotencyKey?: string) =>
+      request<Attachment>(`/attachments/${id}/restore`, {
+        method: 'POST',
+        idempotencyKey,
       }),
 
     // Transfers

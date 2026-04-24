@@ -17,6 +17,7 @@ import { Lock, AlertTriangle } from 'lucide-react';
 import { useUpdateTransaction } from '../../lib/hooks';
 import { Dialog } from '../../components/Dialog';
 import { majorToMinorString, minorStringToMajor } from '../cards/AccountForm';
+import { AttachmentStrip } from '../attachments/AttachmentStrip';
 
 type Props = {
   open: boolean;
@@ -250,6 +251,13 @@ export function EditTransactionDialog({
             className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
           />
         </label>
+
+        <AttachmentStrip
+          mode="live"
+          ownerType="transaction"
+          ownerId={transaction.id}
+          canMutate={!locked}
+        />
 
         {update.isError ? (
           <p className="text-sm text-[var(--color-negative)]">

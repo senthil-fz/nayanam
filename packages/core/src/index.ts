@@ -9,4 +9,5 @@ export * from './transactions';
 export * from './bills';
 export * from './budgets';
 export * from './notifications';
+export * from './attachments';
 export * from './stats';

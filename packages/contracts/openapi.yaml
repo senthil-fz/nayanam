@@ -1879,6 +1879,316 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
 
+  /attachments/presign-upload:
+    post:
+      operationId: presignUploadAttachment
+      summary: Presign a direct-to-S3 upload for a new attachment
+      description: |
+        Validates owner existence (scoped to the active household) and the
+        MIME + size caps, inserts an `attachments` row with `status=PENDING`,
+        and returns the signed PUT URL the client must use to upload the
+        object directly to S3. Roles MEMBER+.
+      tags: [attachments]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PresignUploadInput' }
+      responses:
+        '201':
+          description: Presigned upload intent created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PresignUploadResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
+  /attachments/{id}/finalize:
+    post:
+      operationId: finalizeAttachment
+      summary: Finalize an uploaded attachment
+      description: |
+        Called by the client after a successful PUT to the presigned URL. The
+        server issues a `HeadObject`, verifies the declared size, and for
+        images generates a thumbnail inline. Transitions the row to
+        `status=READY` and returns the attachment with fresh signed URLs.
+        Roles MEMBER+; the caller must be the original uploader OR ADMIN+.
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Attachment finalized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
+  /attachments:
+    get:
+      operationId: listAttachments
+      summary: List attachments for a given owner
+      description: |
+        Returns all attachments attached to the supplied owner row. Bounded
+        (at most 50 per owner in v1); not cursor-paginated. By default only
+        `READY` rows are returned and soft-deleted rows are hidden.
+      tags: [attachments]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: ownerType
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/AttachmentOwnerType' }
+        - name: ownerId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: includeFailed
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+        - name: includeDeleted
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Attachments for the owner
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentListResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /attachments/{id}:
+    get:
+      operationId: getAttachment
+      summary: Get an attachment with fresh signed URLs
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Attachment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteAttachment
+      summary: Soft-delete an attachment and remove the S3 object
+      description: |
+        MEMBER may delete own attachments; ADMIN+ may delete any attachment
+        in the household. Restorable within 24h via `POST
+        /attachments/{id}/restore` (ADMIN+ only).
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /attachments/{id}/restore:
+    post:
+      operationId: restoreAttachment
+      summary: Restore a soft-deleted attachment (within 24h)
+      description: |
+        ADMIN+ only. Fails with `ATTACHMENT_NOT_RESTORABLE` (409) outside the
+        24h window or when the S3 object has been reaped.
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /attachments/{id}/download-url:
+    get:
+      operationId: getAttachmentDownloadUrl
+      summary: Mint a fresh signed download URL for an attachment
+      description: |
+        Returns a short-lived signed GET URL for the attachment's primary
+        object. Roles VIEWER+.
+      tags: [attachments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Signed URL
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentDownloadUrlResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: List notifications for the current user
+      description: |
+        Cursor paginated. Sorted by `createdAt DESC, id DESC`. User-scoped:
+        returns notifications for the authenticated user across every
+        household they belong to. `X-Household-Id` is required by the
+        middleware for consistency but not used to filter results. Soft-
+        deleted rows are excluded by default.
+      tags: [notifications]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: unreadOnly
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+        - name: category
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/NotificationCategory' }
+      responses:
+        '200':
+          description: Notifications page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationsPage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /notifications/mark-all-read:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark every unread notification as read (optionally filtered by category)
+      tags: [notifications]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkAllNotificationsReadInput' }
+      responses:
+        '200':
+          description: Count of rows updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarkAllNotificationsReadResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /notifications/{id}/mark-read:
+    post:
+      operationId: markNotificationRead
+      summary: Mark a single notification as read
+      tags: [notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Updated notification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /notifications/{id}/mark-unread:
+    post:
+      operationId: markNotificationUnread
+      summary: Mark a single notification as unread
+      tags: [notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Updated notification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /notifications/{id}:
+    delete:
+      operationId: deleteNotification
+      summary: Soft-delete a notification
+      tags: [notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
   /notifications/unread-count:
     get:
       operationId: getNotificationsUnreadCount
@@ -2249,6 +2559,14 @@ components:
         - BUDGET_PERIOD_IMMUTABLE
         - BUDGET_ALREADY_PAUSED
         - BUDGET_ALREADY_ACTIVE
+        - ATTACHMENT_MIME_NOT_ALLOWED
+        - ATTACHMENT_TOO_LARGE
+        - ATTACHMENT_OWNER_NOT_FOUND
+        - ATTACHMENT_FINALIZE_FAILED
+        - ATTACHMENT_SIZE_MISMATCH
+        - ATTACHMENT_ALREADY_FINALIZED
+        - ATTACHMENT_NOT_RESTORABLE
+        - STORAGE_UNAVAILABLE
 
     ErrorResponse:
       type: object
@@ -3047,6 +3365,278 @@ components:
             Count of notifications for the authenticated user where
             `readAt IS NULL`. Capped at 9999 — any true count of 9999 or
             greater is returned as 9999.
+
+    NotificationCategory:
+      type: string
+      enum: [bill, budget, transaction, transfer, household, other]
+      description: |
+        Client-facing grouping derived from the `type` field (`type.split('.')[0]`).
+        Used by the notification center filter chips.
+
+    Notification:
+      type: object
+      description: |
+        A single user-scoped in-app notification. `payload` is schema-free JSON;
+        each `type` documents its own payload shape in the spec.
+      required: [id, userId, householdId, type, category, payload, readAt, deletedAt, createdAt]
+      properties:
+        id:
+          type: string
+          description: ULID.
+        userId:
+          type: string
+          description: The recipient user ULID.
+        householdId:
+          type: [string, 'null']
+          description: |
+            Optional household context the notification was emitted in. Null
+            for user-scoped notifications that aren't bound to a household.
+        type:
+          type: string
+          description: |
+            Dotted event-type key (e.g. `bill.due_soon`, `budget.threshold_fired`).
+            The first segment drives the `category` convenience field.
+        category: { $ref: '#/components/schemas/NotificationCategory' }
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON payload; shape is defined per `type` by the emitter.
+            Clients should treat unknown fields as forward-compatible.
+        readAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            UTC timestamp at which the recipient marked the notification read.
+            Null when unread.
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            UTC soft-delete timestamp. Null for live rows. The list endpoint
+            excludes soft-deleted rows by default.
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC timestamp of emission.
+
+    NotificationsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Notification' }
+
+    MarkAllNotificationsReadInput:
+      type: object
+      properties:
+        category:
+          $ref: '#/components/schemas/NotificationCategory'
+
+    MarkAllNotificationsReadResponse:
+      type: object
+      required: [updatedCount]
+      properties:
+        updatedCount:
+          type: integer
+          minimum: 0
+          description: Number of notifications transitioned from unread to read.
+
+    AttachmentOwnerType:
+      type: string
+      enum: [transaction]
+      description: |
+        The domain owner-row type for an attachment. Only `transaction` is
+        exercised in v1; the enum is extended in later phases as new owner
+        types arrive.
+
+    AttachmentStatus:
+      type: string
+      enum: [PENDING, READY, FAILED]
+      description: |
+        Lifecycle state. `PENDING` rows are created at presign time;
+        `READY` after a successful finalize; `FAILED` on finalize failure
+        or when the daily reaper sweeps stale pending rows.
+
+    AttachmentMime:
+      type: string
+      enum:
+        - image/jpeg
+        - image/png
+        - image/heic
+        - image/webp
+        - application/pdf
+      description: Allowlisted MIME types for upload.
+
+    Attachment:
+      type: object
+      description: |
+        A receipt or document attached to a domain row. Persisted fields
+        describe the stored object. The transport-only fields `downloadUrl`,
+        `thumbUrl`, and `urlExpiresAt` are populated on GET endpoints (list,
+        get, finalize, restore) with short-lived signed URLs and may be
+        absent on endpoints that do not mint URLs.
+      required:
+        - id
+        - householdId
+        - ownerType
+        - ownerId
+        - key
+        - mime
+        - size
+        - originalFilename
+        - thumbKey
+        - width
+        - height
+        - status
+        - createdBy
+        - createdAt
+        - updatedAt
+        - deletedAt
+      properties:
+        id:
+          type: string
+          description: ULID.
+        householdId:
+          type: string
+          description: Owning household ULID.
+        ownerType: { $ref: '#/components/schemas/AttachmentOwnerType' }
+        ownerId:
+          type: string
+          description: ULID of the owner row (polymorphic; resolves by `ownerType`).
+        key:
+          type: string
+          description: S3 object key. Unique across all attachment rows.
+        mime: { $ref: '#/components/schemas/AttachmentMime' }
+        size:
+          type: string
+          description: |
+            Object size in bytes as a decimal string (bigint-safe over JSON).
+            Positive integer.
+        originalFilename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: User-provided display filename (trimmed, path-stripped).
+        thumbKey:
+          type: [string, 'null']
+          description: |
+            S3 key for a 256px WebP thumbnail. Null for PDFs and when
+            thumbnail generation failed (e.g. HEIC without libheif).
+        width:
+          type: [integer, 'null']
+          description: Pixel width for images (from sharp metadata).
+        height:
+          type: [integer, 'null']
+          description: Pixel height for images.
+        status: { $ref: '#/components/schemas/AttachmentStatus' }
+        createdBy:
+          type: string
+          description: User ULID of the uploader.
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC creation timestamp.
+        updatedAt:
+          type: string
+          format: date-time
+          description: UTC last-update timestamp.
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            UTC soft-delete timestamp. Null for live rows. Restorable within
+            24h via the restore endpoint.
+        downloadUrl:
+          type: string
+          format: uri
+          description: |
+            Short-lived signed GET URL for the primary object. Returned on
+            endpoints that mint URLs (list/get/finalize/restore) and absent
+            otherwise. Expires at `urlExpiresAt`.
+        thumbUrl:
+          type: [string, 'null']
+          format: uri
+          description: |
+            Short-lived signed GET URL for the thumbnail, when present. Null
+            when `thumbKey` is null. Only returned on URL-minting endpoints.
+        urlExpiresAt:
+          type: string
+          format: date-time
+          description: |
+            UTC expiry of `downloadUrl` and `thumbUrl`. Only returned on
+            URL-minting endpoints.
+
+    PresignUploadInput:
+      type: object
+      required: [ownerType, ownerId, filename, mime, size]
+      properties:
+        ownerType: { $ref: '#/components/schemas/AttachmentOwnerType' }
+        ownerId:
+          type: string
+          description: ULID of the owning domain row.
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Display filename. Trimmed and path-stripped server-side.
+        mime: { $ref: '#/components/schemas/AttachmentMime' }
+        size:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: |
+            Declared byte size as a positive decimal string (bigint-safe).
+            Validated against per-MIME caps at presign time and re-verified
+            via `HeadObject` at finalize time.
+
+    PresignUploadResponse:
+      type: object
+      required: [attachmentId, key, uploadUrl, requiredHeaders, expiresAt]
+      properties:
+        attachmentId:
+          type: string
+          description: ULID of the newly created PENDING attachment row.
+        key:
+          type: string
+          description: S3 object key the client will PUT to.
+        uploadUrl:
+          type: string
+          format: uri
+          description: Signed PUT URL with Content-Type and Content-Length bound.
+        requiredHeaders:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Headers the client MUST include on the PUT request. At minimum
+            contains `Content-Type`. Values are opaque strings.
+        expiresAt:
+          type: string
+          format: date-time
+          description: UTC expiry of the signed URL (typically 5 minutes).
+
+    AttachmentListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+
+    AttachmentDownloadUrlResponse:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Signed GET URL for the attachment's primary object.
+        expiresAt:
+          type: string
+          format: date-time
+          description: UTC expiry of the signed URL (typically 5 minutes).
 
     Transfer:
       type: object
@@ -4163,6 +4753,8 @@ tags:
   - name: budgets
     description: Household-wide and per-category spending ceilings with threshold notifications and per-period rollover.
   - name: notifications
-    description: Per-user notification surfaces (unread counts, list, mark-read).
+    description: Per-user notification center — unread count, cursor-paginated list, mark-read/unread, mark-all-read, and soft-delete.
+  - name: attachments
+    description: Receipt + document attachments on domain rows (v1 scope — transactions). Presigned S3 upload, finalize, signed download URLs, soft-delete with 24h restore window.
   - name: stats
     description: Read-only aggregate analytics over transactions (overview, trends, category breakdown, daily spend, sparklines, Sankey flow).
