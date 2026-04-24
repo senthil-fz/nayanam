@@ -3,6 +3,15 @@ import { Expo, type ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
+ * Phase 9 — category-to-preference gate applied before any Expo push. Keeps the
+ * existing per-user fan-out path intact for bills + budgets while honoring the
+ * new user_notification_preferences table. `send()` callers pass the category
+ * (bills | budgets | household_activity | weekly_summary); absent callers
+ * default to household_activity.
+ */
+export type PushCategory = 'bills' | 'budgets' | 'household_activity' | 'weekly_summary';
+
+/**
  * Thin wrapper around the Expo Push SDK. Used by the bills scheduler to
  * enqueue per-user push notifications after writing a `notifications` row.
  *
@@ -38,8 +47,20 @@ export class PushNotificationsService {
       data: Record<string, unknown>;
       sound?: 'default' | null;
       priority?: 'default' | 'normal' | 'high';
+      category?: PushCategory;
     },
   ): Promise<void> {
+    // Phase 9: honor user_notification_preferences for push. Missing rows
+    // count as defaults-on (mirrors NotificationsDispatchService.loadPrefs).
+    const category: PushCategory = payload.category ?? 'household_activity';
+    const prefs = await this.prisma.userNotificationPreferences.findUnique({
+      where: { userId },
+    });
+    const pushEnabled = prefs
+      ? categoryPushFlag(prefs, category)
+      : defaultPushFlag(category);
+    if (!pushEnabled) return;
+
     const tokens = await this.prisma.notificationToken.findMany({
       where: { userId },
       select: { id: true, expoPushToken: true },
@@ -93,4 +114,30 @@ export class PushNotificationsService {
       }
     }
   }
+}
+
+function categoryPushFlag(
+  prefs: {
+    pushBillsEnabled: boolean;
+    pushBudgetsEnabled: boolean;
+    pushHouseholdActivityEnabled: boolean;
+    pushWeeklySummaryEnabled: boolean;
+  },
+  category: PushCategory,
+): boolean {
+  switch (category) {
+    case 'bills':
+      return prefs.pushBillsEnabled;
+    case 'budgets':
+      return prefs.pushBudgetsEnabled;
+    case 'household_activity':
+      return prefs.pushHouseholdActivityEnabled;
+    case 'weekly_summary':
+      return prefs.pushWeeklySummaryEnabled;
+  }
+}
+
+function defaultPushFlag(category: PushCategory): boolean {
+  // Match DB defaults: weekly_summary=off; others=on.
+  return category !== 'weekly_summary';
 }

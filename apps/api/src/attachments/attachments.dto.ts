@@ -24,7 +24,7 @@ export const ATTACHMENT_SIZE_CAPS: Record<AttachmentMime, number> = {
   'application/pdf': 25 * 1024 * 1024,
 };
 
-export const AttachmentOwnerTypeSchema = z.enum(['transaction']);
+export const AttachmentOwnerTypeSchema = z.enum(['transaction', 'user', 'household']);
 export type AttachmentOwnerType = z.infer<typeof AttachmentOwnerTypeSchema>;
 
 export const AttachmentMimeSchema = z.enum(ATTACHMENT_MIME_ALLOWLIST);

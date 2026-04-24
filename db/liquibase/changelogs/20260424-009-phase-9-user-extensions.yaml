@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-users-primary-currency-nullable
+      author: nayanam
+      comment: |
+        Phase 9 — relax users.primary_currency_code to NULLABLE. NULL means
+        "fall back to active household's default currency". Existing rows keep
+        their 'USD' value; the server's /me serializer materializes the
+        fallback when the column is NULL. `users.name` already covers
+        "display name" per Phase 1; no separate column needed.
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            tableName: users
+            columnName: primary_currency_code
+      changes:
+        - dropNotNullConstraint:
+            tableName: users
+            columnName: primary_currency_code
+            columnDataType: CHAR(3)
+      rollback:
+        - addNotNullConstraint:
+            tableName: users
+            columnName: primary_currency_code
+            columnDataType: CHAR(3)
+            defaultNullValue: 'USD'

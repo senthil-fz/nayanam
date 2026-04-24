@@ -109,6 +109,25 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Me' }
         '401': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateMe
+      summary: Update the current user's profile
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeInput' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
 
   /me/push-tokens:
     post:
@@ -2466,6 +2485,397 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
 
+  /me/change-email/request:
+    post:
+      operationId: requestChangeEmail
+      summary: Begin an email-change flow; OTP sent to the new address
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeEmailRequestInput' }
+      responses:
+        '200':
+          description: Request accepted; OTP dispatched to new email
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeEmailRequestResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  /me/change-email/verify:
+    post:
+      operationId: verifyChangeEmail
+      summary: Verify the change-email OTP and commit the new address
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeEmailVerifyInput' }
+      responses:
+        '200':
+          description: Email updated; refreshed Me
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/members/{userId}/role:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: userId
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateHouseholdMemberRole
+      summary: Change a household member's role
+      description: |
+        OWNER only. Demoting the last OWNER returns HOUSEHOLD_LAST_OWNER
+        (409). A member must always remain with at least one OWNER.
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMemberRoleInput' }
+      responses:
+        '200':
+          description: Updated member
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HouseholdMember' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/members/{userId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: userId
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: removeHouseholdMember
+      summary: Remove a member from a household
+      description: |
+        OWNER only. Cannot target self (use POST /households/{id}/leave).
+        Cannot remove the last OWNER. Idempotent.
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '204': { description: Removed (or already removed) }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/leave:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    post:
+      operationId: leaveHousehold
+      summary: Current user leaves a household
+      description: |
+        Any role. If the caller is the sole OWNER with other members, returns
+        HOUSEHOLD_LAST_OWNER (409) with `details.mustPromoteBeforeLeaving=true`.
+        If the caller is the only member, the household is soft-deleted.
+        Idempotent.
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '204': { description: Left (or already left) }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/archive:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteHousehold
+      summary: Archive (soft-delete) a household
+      description: |
+        OWNER only. Precondition: caller is the only remaining member, and
+        the household has no non-deleted accounts, transactions, bills, or
+        budgets. Otherwise HOUSEHOLD_NOT_EMPTY (409). Idempotent.
+
+        Exposed as DELETE on `/households/{id}/archive` rather than
+        `/households/{id}` to keep a clean separation from the read path
+        and allow future hard-delete tooling to reuse the root resource.
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '204': { description: Archived (or already archived) }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /me/sessions:
+    get:
+      operationId: listMeSessions
+      summary: List the caller's active sessions
+      description: |
+        Returns all non-revoked sessions for the calling user. Not paginated
+        (session count per user is typically under 10). `isCurrent` is
+        computed against the session id carried in the access token.
+      tags: [me]
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeSessionsResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /me/sessions/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: revokeMeSession
+      summary: Revoke one of the caller's sessions
+      description: |
+        Own sessions only (404 otherwise). Cannot revoke the current session
+        — returns SESSION_CURRENT_CANNOT_REVOKE (409); use POST /auth/logout
+        for that. Idempotent: revoking an already-revoked session returns
+        204 without emitting another event.
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '204': { description: Revoked (or already revoked) }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /me/sessions/revoke-all-others:
+    post:
+      operationId: revokeAllOtherMeSessions
+      summary: Revoke every session except the current one
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '200':
+          description: Count of sessions revoked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RevokeAllOtherSessionsResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /me/security:
+    get:
+      operationId: getMeSecurity
+      summary: Current security settings (biometric + PIN state)
+      description: |
+        Lazy-creates the `user_security` row on first read. Response carries
+        no secrets — `pinSet` is a boolean derived from `pin_hash IS NOT NULL`.
+      tags: [me]
+      responses:
+        '200':
+          description: Security status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeSecurityResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateMeSecurity
+      summary: Update biometric flag and/or PIN
+      description: |
+        Four flows in one endpoint, disambiguated by the body:
+          - Set biometric: `{ biometricEnabled }` (no PIN fields).
+          - First-time PIN: `{ pin }` when `pinSet=false` and no `currentPin`.
+          - Change PIN: `{ pin, currentPin }` when `pinSet=true`.
+          - Reset PIN via OTP: `{ pin, otpToken }` (token from
+            `POST /auth/otp/verify-for-security`).
+        Rejects combinations that don't satisfy one of the flows above.
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeSecurityInput' }
+      responses:
+        '200':
+          description: Updated security status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeSecurityResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '423': { $ref: '#/components/responses/Error' }
+
+  /me/security/verify-pin:
+    post:
+      operationId: verifyMePin
+      summary: Verify a 6-digit PIN against the stored argon2id hash
+      description: |
+        Used by the mobile unlock gate. Argon2id-verifies the submitted PIN
+        against `user_security.pin_hash`. On success returns `{ ok: true }`
+        and resets `pin_failed_attempts`. On failure bumps the counter and
+        returns PIN_INVALID (403); after 5 consecutive failures sets
+        `pin_locked_until` and returns PIN_LOCKED (423) with a `Retry-After`
+        header derived from the remaining lockout window.
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyPinInput' }
+      responses:
+        '200':
+          description: PIN matched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyPinResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '423': { $ref: '#/components/responses/Error' }
+
+  /auth/otp/verify-for-security:
+    post:
+      operationId: authOtpVerifyForSecurity
+      summary: Verify an OTP and issue a short-lived security-reset token
+      description: |
+        Sibling to `/auth/otp/verify` but returns an opaque short-lived
+        (5 min) `otpToken` bound to the user (JWT with
+        `aud: 'security-reset'`) instead of login JWTs. The token is
+        accepted by `PATCH /me/security` for PIN reset flows when the
+        caller has forgotten their current PIN. Does not require auth
+        (reuses Phase 1 `/auth/otp/request` primitives).
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyOtpForSecurityInput' }
+      responses:
+        '200':
+          description: Security-reset token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyOtpForSecurityResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /me/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: Current user's notification preferences
+      description: |
+        Lazy-creates the `user_notification_preferences` row on first read
+        with documented defaults (push defaults ON for bills/budgets/
+        household-activity; email default ON for weekly-summary only).
+      tags: [me]
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateNotificationPreferences
+      summary: Partial update of the 8 push/email toggles
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchNotificationPreferencesInput' }
+      responses:
+        '200':
+          description: Updated preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /weekly-summaries/preview:
+    get:
+      operationId: getWeeklySummaryPreview
+      summary: Per-household income/expense summary for a given week
+      description: |
+        Dev/diagnostic endpoint — returns the same shape the weekly-summary
+        scheduler computes for the calling user. `weekEndingAt` (Sunday
+        00:00 UTC of the target week) defaults to the last completed week.
+      tags: [me]
+      parameters:
+        - name: weekEndingAt
+          in: query
+          required: false
+          description: |
+            ISO 8601 UTC date-time at the Sunday 00:00 UTC boundary. When
+            omitted the server substitutes the previous such boundary.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Weekly summary preview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklySummaryPreview' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /meta/links:
+    get:
+      operationId: getMetaLinks
+      summary: Help / Contact / Terms / Privacy external links + app versions
+      description: |
+        Environment-driven external-link set used by the Settings "About"
+        section. Requires auth (parity with other `/me` surfaces; no
+        pre-login consumer for these URLs).
+      tags: [meta]
+      responses:
+        '200':
+          description: Links + versions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaLinksResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+
 components:
   parameters:
     Cursor:
@@ -2567,6 +2977,21 @@ components:
         - ATTACHMENT_ALREADY_FINALIZED
         - ATTACHMENT_NOT_RESTORABLE
         - STORAGE_UNAVAILABLE
+        - EMAIL_ALREADY_IN_USE
+        - EMAIL_CHANGE_NOT_PENDING
+        - EMAIL_CHANGE_COOLDOWN
+        - HOUSEHOLD_LAST_OWNER
+        - HOUSEHOLD_NOT_EMPTY
+        - SESSION_CURRENT_CANNOT_REVOKE
+        - PIN_INVALID
+        - PIN_NOT_SET
+        - PIN_FORMAT_INVALID
+        - PIN_LOCKED
+        - OTP_INVALID
+        - OTP_EXPIRED
+        - OTP_MAX_ATTEMPTS
+        - OTP_TOKEN_INVALID
+        - OTP_TOKEN_EXPIRED
 
     ErrorResponse:
       type: object
@@ -2659,6 +3084,22 @@ components:
         households:
           type: array
           items: { $ref: '#/components/schemas/HouseholdSummary' }
+        primaryCurrencyCode:
+          type: [string, 'null']
+          minLength: 3
+          maxLength: 3
+          description: |
+            Caller's primary currency (ISO 4217). Phase 9 relaxed this to
+            nullable; `null` means "fall back to active household's
+            `defaultCurrencyCode`". Surfaced at `Me` level (not `Me.user`)
+            to preserve Phase 1 `User.primaryCurrencyCode` non-null typing
+            for backwards compatibility with earlier generated clients.
+        avatarAttachmentId:
+          type: [string, 'null']
+          description: |
+            ULID of the most-recent READY, non-deleted Attachment where
+            `ownerType='user'` and `ownerId = user.id`. Null if the user
+            has not uploaded an avatar yet.
 
     PushTokenCreate:
       type: object
@@ -2699,6 +3140,18 @@ components:
         name: { type: string }
         defaultCurrencyCode: { type: string }
         createdAt: { type: string, format: date-time }
+        iconToken:
+          type: [string, 'null']
+          description: |
+            Optional icon token (client-side mapping to an SVG/glyph set).
+            Added in Phase 9; nullable for backwards compatibility with
+            pre-Phase-9 households.
+        colorToken:
+          type: [string, 'null']
+          description: |
+            Optional color token (client-side mapping to a palette entry,
+            e.g. one of the Phase 2 account color tokens). Added in
+            Phase 9; nullable for backwards compatibility.
 
     HouseholdCreate:
       type: object
@@ -2709,9 +3162,18 @@ components:
 
     HouseholdUpdate:
       type: object
+      description: |
+        Mutable fields on a household. All optional; omitted fields are
+        left unchanged. OWNER or ADMIN required.
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         defaultCurrencyCode: { type: string, minLength: 3, maxLength: 3 }
+        iconToken:
+          type: [string, 'null']
+          description: Pass `null` to clear. Added in Phase 9.
+        colorToken:
+          type: [string, 'null']
+          description: Pass `null` to clear. Added in Phase 9.
 
     HouseholdMember:
       type: object
@@ -2723,6 +3185,21 @@ components:
         name: { type: [string, 'null'] }
         role: { $ref: '#/components/schemas/HouseholdRole' }
         joinedAt: { type: string, format: date-time }
+        avatarAttachmentId:
+          type: [string, 'null']
+          description: |
+            ULID of the member's current avatar attachment (most-recent
+            READY, non-deleted Attachment where `ownerType='user'` and
+            `ownerId = member.userId`). Null if the member has not
+            uploaded an avatar. Added in Phase 9.
+        lastSeenAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            MAX `last_seen_at` across the member's non-revoked sessions
+            (ISO 8601 UTC). Null when the member has no active sessions.
+            Debounced server-side to at most one write / 60s per session.
+            Added in Phase 9.
 
     HouseholdInviteCreate:
       type: object
@@ -3447,11 +3924,12 @@ components:
 
     AttachmentOwnerType:
       type: string
-      enum: [transaction]
+      enum: [transaction, user, household]
       description: |
-        The domain owner-row type for an attachment. Only `transaction` is
-        exercised in v1; the enum is extended in later phases as new owner
-        types arrive.
+        The domain owner-row type for an attachment. `transaction` is the
+        v1 scope (Phase 8). `user` and `household` are added in Phase 9 to
+        support avatars — most-recent READY attachment of the matching
+        owner is treated as the current avatar.
 
     AttachmentStatus:
       type: string
@@ -4728,6 +5206,309 @@ components:
           type: array
           items: { $ref: '#/components/schemas/SankeyLink' }
 
+    UpdateMeInput:
+      type: object
+      description: Patch for the caller's profile. All fields optional.
+      properties:
+        name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        primaryCurrencyCode:
+          type: [string, 'null']
+          minLength: 3
+          maxLength: 3
+          description: |
+            ISO 4217 currency code. Pass `null` to clear (the caller will
+            then fall back to the active household's `defaultCurrencyCode`
+            when a currency is needed).
+
+    ChangeEmailRequestInput:
+      type: object
+      required: [newEmail]
+      properties:
+        newEmail: { type: string, format: email }
+
+    ChangeEmailRequestResponse:
+      type: object
+      required: [expiresAt, nextAllowedAt]
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: |
+            Absolute UTC deadline after which the OTP is rejected. Derived
+            from the server's 10-minute window.
+        nextAllowedAt:
+          type: string
+          format: date-time
+          description: |
+            Earliest UTC instant at which another `request` call may be
+            made without tripping EMAIL_CHANGE_COOLDOWN (60s resend guard).
+
+    ChangeEmailVerifyInput:
+      type: object
+      required: [otp]
+      properties:
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: 6-digit numeric code delivered to the new address.
+
+    UpdateMemberRoleInput:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: '#/components/schemas/HouseholdRole' }
+
+    MeSessionDeviceKind:
+      type: string
+      enum: [web, ios, android, other]
+
+    MeSession:
+      type: object
+      required: [id, deviceKind, lastSeenAt, isCurrent, createdAt]
+      properties:
+        id: { type: string, description: Session ULID. }
+        deviceName:
+          type: [string, 'null']
+          description: |
+            Self-reported client label (e.g. `iPhone 15 Pro`, `Chrome on
+            macOS`) or UA-derived fallback. Null when the client did not
+            provide one and UA parsing failed.
+        deviceKind: { $ref: '#/components/schemas/MeSessionDeviceKind' }
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 UTC. Bumped at most once per 60s per session on any
+            authenticated request.
+        ipAddressHash:
+          type: [string, 'null']
+          description: |
+            SHA-256(`ip || SESSION_SALT`). Not reversible. Lets the user
+            spot "different IP fingerprint" patterns without the server
+            ever storing raw IPs.
+        isCurrent:
+          type: boolean
+          description: |
+            True iff this session id matches the one carried in the
+            caller's access token.
+        createdAt: { type: string, format: date-time }
+
+    MeSessionsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MeSession' }
+
+    RevokeAllOtherSessionsResponse:
+      type: object
+      required: [revokedCount]
+      properties:
+        revokedCount:
+          type: integer
+          minimum: 0
+          description: Number of sessions transitioned from active to revoked.
+
+    MeSecurityResponse:
+      type: object
+      required: [biometricEnabled, pinSet]
+      properties:
+        biometricEnabled:
+          type: boolean
+          description: |
+            Server-stored flag indicating the user opted in to biometric
+            unlock on at least one device. The actual biometric secret
+            lives in the OS keystore; the server never sees it.
+        pinSet:
+          type: boolean
+          description: Derived from `user_security.pin_hash IS NOT NULL`.
+        pinLockedUntil:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            When non-null and in the future, PIN verification is locked
+            until this instant (15-minute cooldown after 5 consecutive
+            failed attempts).
+
+    UpdateMeSecurityInput:
+      type: object
+      description: |
+        Body for `PATCH /me/security`. Valid shapes:
+          - `{ biometricEnabled }` — toggle biometric flag.
+          - `{ pin }` — set first-time PIN (requires `pinSet=false`).
+          - `{ pin, currentPin }` — change existing PIN.
+          - `{ pin, otpToken }` — reset PIN via OTP token.
+          - `{ pin: null, currentPin }` — clear PIN (only allowed when
+            biometric is also disabled server-side).
+        Shapes that don't match one of the above are rejected.
+      properties:
+        biometricEnabled: { type: boolean }
+        pin:
+          type: [string, 'null']
+          minLength: 6
+          maxLength: 6
+          pattern: '^\d{6}$'
+        currentPin:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^\d{6}$'
+        otpToken:
+          type: string
+          description: |
+            Short-lived security-reset token from
+            `POST /auth/otp/verify-for-security`.
+
+    VerifyPinInput:
+      type: object
+      required: [pin]
+      properties:
+        pin:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^\d{6}$'
+
+    VerifyPinResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    VerifyOtpForSecurityInput:
+      type: object
+      required: [email, otp]
+      properties:
+        email: { type: string, format: email }
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+    VerifyOtpForSecurityResponse:
+      type: object
+      required: [otpToken, expiresAt]
+      properties:
+        otpToken:
+          type: string
+          description: |
+            Opaque JWT with `aud: 'security-reset'`, 5-minute TTL. Accepted
+            by `PATCH /me/security` for PIN reset flows.
+        expiresAt:
+          type: string
+          format: date-time
+
+    NotificationPreferences:
+      type: object
+      required:
+        - pushBillsEnabled
+        - pushBudgetsEnabled
+        - pushHouseholdActivityEnabled
+        - pushWeeklySummaryEnabled
+        - emailBillsEnabled
+        - emailBudgetsEnabled
+        - emailHouseholdActivityEnabled
+        - emailWeeklySummaryEnabled
+        - updatedAt
+      properties:
+        pushBillsEnabled: { type: boolean }
+        pushBudgetsEnabled: { type: boolean }
+        pushHouseholdActivityEnabled: { type: boolean }
+        pushWeeklySummaryEnabled: { type: boolean }
+        emailBillsEnabled: { type: boolean }
+        emailBudgetsEnabled: { type: boolean }
+        emailHouseholdActivityEnabled: { type: boolean }
+        emailWeeklySummaryEnabled: { type: boolean }
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC.
+
+    PatchNotificationPreferencesInput:
+      type: object
+      description: |
+        Partial update — any subset of the 8 toggles. Every field omitted
+        is left unchanged. `updatedAt` is server-owned and not accepted on
+        write.
+      properties:
+        pushBillsEnabled: { type: boolean }
+        pushBudgetsEnabled: { type: boolean }
+        pushHouseholdActivityEnabled: { type: boolean }
+        pushWeeklySummaryEnabled: { type: boolean }
+        emailBillsEnabled: { type: boolean }
+        emailBudgetsEnabled: { type: boolean }
+        emailHouseholdActivityEnabled: { type: boolean }
+        emailWeeklySummaryEnabled: { type: boolean }
+
+    WeeklySummaryCurrencyBucket:
+      type: object
+      required: [currencyCode, incomeMinor, expenseMinor, netMinor, transactionCount]
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        incomeMinor:
+          type: string
+          description: |
+            Stringified integer minor units. `netMinor = incomeMinor -
+            expenseMinor`. Stringified because week-scale totals can
+            exceed JS safe-integer bounds.
+        expenseMinor: { type: string }
+        netMinor: { type: string }
+        transactionCount:
+          type: integer
+          minimum: 0
+
+    WeeklySummaryHousehold:
+      type: object
+      required: [householdId, householdName, byCurrency]
+      properties:
+        householdId: { type: string }
+        householdName: { type: string }
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/WeeklySummaryCurrencyBucket' }
+
+    WeeklySummaryPreview:
+      type: object
+      required: [userId, weekStart, weekEnd, perHousehold]
+      properties:
+        userId: { type: string }
+        weekStart:
+          type: string
+          format: date-time
+          description: |
+            Inclusive Monday 00:00 UTC of the summarized week.
+        weekEnd:
+          type: string
+          format: date-time
+          description: |
+            Exclusive Sunday 00:00 UTC (end-of-week + 1 day).
+        perHousehold:
+          type: array
+          items: { $ref: '#/components/schemas/WeeklySummaryHousehold' }
+
+    MetaLinksResponse:
+      type: object
+      required: [appVersion, apiVersion]
+      properties:
+        helpUrl: { type: [string, 'null'], format: uri }
+        contactUrl: { type: [string, 'null'], format: uri }
+        termsUrl: { type: [string, 'null'], format: uri }
+        privacyUrl: { type: [string, 'null'], format: uri }
+        appVersion:
+          type: string
+          description: Semver of the deployed mobile/web app (env-driven).
+        apiVersion:
+          type: string
+          description: Semver of the backend (env-driven).
+
 security:
   - BearerAuth: []
 
@@ -4737,9 +5518,14 @@ tags:
   - name: auth
     description: Email+OTP authentication, refresh, and session revocation.
   - name: me
-    description: Endpoints scoped to the authenticated user (profile, push tokens).
+    description: |
+      Endpoints scoped to the authenticated user — profile, push tokens,
+      change-email, sessions, security (biometric + PIN), notification
+      preferences, weekly-summary preview.
   - name: households
-    description: Household tenants, members, and invites.
+    description: |
+      Household tenants, members, and invites — plus member role changes,
+      removal, self-leave, and household archive (Phase 9).
   - name: accounts
     description: Financial accounts owned by a household.
   - name: categories

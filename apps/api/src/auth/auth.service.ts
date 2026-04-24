@@ -204,14 +204,88 @@ export class AuthService {
     }));
   }
 
-  serializeUser(user: { id: string; email: string; name: string | null; primaryCurrencyCode: string; createdAt: Date }) {
+  serializeUser(user: { id: string; email: string; name: string | null; primaryCurrencyCode: string | null; createdAt: Date }) {
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      primaryCurrencyCode: user.primaryCurrencyCode,
+      primaryCurrencyCode: user.primaryCurrencyCode ?? 'USD',
       createdAt: user.createdAt.toISOString(),
     };
+  }
+
+  /**
+   * Phase 9: short-lived OTP token issued after /auth/otp/verify-for-security.
+   * aud=security-reset, sub=userId, 5-minute expiry. Cannot be used as an
+   * access token because the jwt-access strategy rejects `typ !== 'access'`.
+   */
+  signOtpTokenForSecurity(userId: string): { token: string; expiresInSeconds: number } {
+    const ttl = 300;
+    const token = this.jwt.sign(
+      { sub: userId, typ: 'otp', aud: 'security-reset' },
+      {
+        secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret-change-me',
+        expiresIn: ttl,
+      },
+    );
+    return { token, expiresInSeconds: ttl };
+  }
+
+  /** Verify a security-reset OTP token; returns the subject userId or throws. */
+  verifyOtpTokenForSecurity(token: string): Promise<string> {
+    return Promise.resolve().then(() => this.verifyOtpTokenForSecuritySync(token));
+  }
+
+  private verifyOtpTokenForSecuritySync(token: string): string {
+    try {
+      const payload = this.jwt.verify<{ sub: string; typ?: string; aud?: string }>(token, {
+        secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret-change-me',
+      });
+      if (payload.typ !== 'otp' || payload.aud !== 'security-reset' || !payload.sub) {
+        throw Errors.authTokenInvalid();
+      }
+      return payload.sub;
+    } catch {
+      throw Errors.authTokenInvalid();
+    }
+  }
+
+  /**
+   * Phase 9: mirror of verifyOtp but issues a short-lived otpToken scoped to
+   * security operations instead of creating a session.
+   */
+  async verifyOtpForSecurity(
+    emailRaw: string,
+    code: string,
+  ): Promise<{ otpToken: string; expiresInSeconds: number }> {
+    // see end of method
+    const email = emailRaw.trim().toLowerCase();
+    const codeHash = sha256Hex(code);
+
+    const otp = await this.prisma.otpCode.findFirst({
+      where: {
+        email,
+        purpose: 'login',
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp) throw Errors.authOtpInvalid();
+    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw Errors.authOtpInvalid({ reason: 'too_many_attempts' });
+    if (otp.codeHash !== codeHash) {
+      await this.prisma.otpCode.update({
+        where: { id: otp.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw Errors.authOtpInvalid();
+    }
+    await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw Errors.authOtpInvalid();
+    const signed = this.signOtpTokenForSecurity(user.id);
+    return { otpToken: signed.token, expiresInSeconds: signed.expiresInSeconds };
   }
 }
 

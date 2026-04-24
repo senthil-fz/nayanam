@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-weekly-summary-sends
+      author: nayanam
+      comment: |
+        Phase 9 — weekly summary send-log. Unique (user_id, week_ending_at)
+        deduplicates scheduler re-runs. Small volume (<= 52 rows/user/year);
+        no retention policy.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: weekly_summary_sends
+      changes:
+        - createTable:
+            tableName: weekly_summary_sends
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_wss_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: week_ending_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: sent_at,        type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: weekly_summary_sends
+            columnNames: user_id, week_ending_at
+            constraintName: uq_wss_user_week
+      rollback:
+        - dropUniqueConstraint:
+            tableName: weekly_summary_sends
+            constraintName: uq_wss_user_week
+        - dropTable:
+            tableName: weekly_summary_sends

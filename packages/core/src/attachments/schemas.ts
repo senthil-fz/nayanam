@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 
-export const AttachmentOwnerTypeEnum = z.enum(['transaction']);
+export const AttachmentOwnerTypeEnum = z.enum(['transaction', 'user', 'household']);
 export type AttachmentOwnerType = z.infer<typeof AttachmentOwnerTypeEnum>;
 
 export const AttachmentStatusEnum = z.enum(['PENDING', 'READY', 'FAILED']);

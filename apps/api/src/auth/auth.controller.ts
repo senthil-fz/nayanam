@@ -34,4 +34,16 @@ export class AuthController {
   async logout(@CurrentUser() user: AuthContext) {
     await this.auth.logout(user.sessionId);
   }
+
+  /**
+   * Phase 9 — verifies a Phase 1 login OTP but returns a short-lived
+   * security-scoped `otpToken` instead of a session. Used by the PIN-reset
+   * flow: client calls POST /auth/otp/request, then this endpoint, then
+   * POST /me/security/reset-pin with the returned token.
+   */
+  @Post('otp/verify-for-security')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtpForSecurity(@Body() body: OtpVerifyDto) {
+    return this.auth.verifyOtpForSecurity(body.email, body.code);
+  }
 }

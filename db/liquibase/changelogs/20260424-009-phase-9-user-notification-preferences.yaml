@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-user-notification-preferences
+      author: nayanam
+      comment: |
+        Phase 9 — per-user notification preferences. One row per user, PK = user_id.
+        Lazy-created on first GET /me/notification-preferences. Defaults favor
+        in-app + push for actionable categories (bills/budgets/household-activity)
+        and email for weekly-summary only.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: user_notification_preferences
+      changes:
+        - createTable:
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_unp_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: push_bills_enabled,              type: BOOLEAN, defaultValueBoolean: true,  constraints: { nullable: false } }
+              - column: { name: push_budgets_enabled,            type: BOOLEAN, defaultValueBoolean: true,  constraints: { nullable: false } }
+              - column: { name: push_household_activity_enabled, type: BOOLEAN, defaultValueBoolean: true,  constraints: { nullable: false } }
+              - column: { name: push_weekly_summary_enabled,     type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: email_bills_enabled,             type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: email_budgets_enabled,           type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: email_household_activity_enabled,type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: email_weekly_summary_enabled,    type: BOOLEAN, defaultValueBoolean: true,  constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+      rollback:
+        - dropTable:
+            tableName: user_notification_preferences

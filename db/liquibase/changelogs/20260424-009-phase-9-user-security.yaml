@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-user-security
+      author: nayanam
+      comment: |
+        Phase 9 — per-user security settings (biometric flag + argon2id PIN).
+        One row per user, PK = user_id. argon2id's output string embeds algorithm,
+        params, salt, and hash, so a single pin_hash column suffices — no separate
+        salt column. 5-attempt lockout with 15-minute cooldown is enforced at
+        the service layer using pin_failed_attempts + pin_locked_until.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: user_security
+      changes:
+        - createTable:
+            tableName: user_security
+            columns:
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_us_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: biometric_enabled,     type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: pin_hash,              type: TEXT }
+              - column: { name: pin_last_changed_at,   type: TIMESTAMPTZ }
+              - column: { name: pin_failed_attempts,   type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: pin_locked_until,      type: TIMESTAMPTZ }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+      rollback:
+        - dropTable:
+            tableName: user_security

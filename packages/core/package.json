@@ -19,7 +19,9 @@
     "./budgets": "./src/budgets/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./attachments": "./src/attachments/index.ts",
-    "./stats": "./src/stats/index.ts"
+    "./stats": "./src/stats/index.ts",
+    "./me": "./src/me/index.ts",
+    "./households": "./src/households/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -9,17 +9,20 @@ import {
   Patch,
   Post,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdMemberGuard } from './household-member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthContext } from '../common/context';
+import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { HouseholdsService } from './households.service';
 import {
   HouseholdCreateDto,
   HouseholdUpdateDto,
   InviteAcceptDto,
   InviteCreateDto,
+  MemberRoleUpdateDto,
 } from './households.dto';
 
 @Controller({ path: 'households', version: '1' })
@@ -85,6 +88,54 @@ export class HouseholdsController {
     @Param('inviteId') inviteId: string,
   ) {
     await this.svc.revokeInvite(ctx.userId, id, inviteId);
+  }
+
+  // ---- Phase 9 member management ----
+
+  @Patch(':id/members/:userId/role')
+  @UseGuards(HouseholdMemberGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  updateMemberRole(
+    @CurrentUser() ctx: AuthContext,
+    @Param('id') id: string,
+    @Param('userId') targetUserId: string,
+    @Body() body: MemberRoleUpdateDto,
+  ) {
+    return this.svc.updateMemberRole(ctx.userId, id, targetUserId, body.role);
+  }
+
+  @Delete(':id/members/:userId')
+  @UseGuards(HouseholdMemberGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  removeMember(
+    @CurrentUser() ctx: AuthContext,
+    @Param('id') id: string,
+    @Param('userId') targetUserId: string,
+  ) {
+    return this.svc.removeMember(ctx.userId, id, targetUserId);
+  }
+
+  @Post(':id/leave')
+  @UseGuards(HouseholdMemberGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  leave(@CurrentUser() ctx: AuthContext, @Param('id') id: string) {
+    return this.svc.leave(ctx.userId, id);
+  }
+
+  /**
+   * Archive (soft-delete) the household. Chose `/archive` as a sub-path rather
+   * than claiming `DELETE /households/:id` so the root path remains free for a
+   * future hard-delete flow.
+   */
+  @Delete(':id/archive')
+  @UseGuards(HouseholdMemberGuard)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
+  archive(@CurrentUser() ctx: AuthContext, @Param('id') id: string) {
+    return this.svc.archive(ctx.userId, id);
   }
 }
 

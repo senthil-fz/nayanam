@@ -20,7 +20,10 @@ import { BudgetsModule } from './budgets/budgets.module';
 import { StatsModule } from './stats/stats.module';
 import { StorageModule } from './storage/storage.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { MetaModule } from './meta/meta.module';
+import { WeeklySummariesModule } from './weekly-summaries/weekly-summaries.module';
 import { RequestContextMiddleware } from './common/context.middleware';
+import { LastSeenMiddleware } from './sessions/last-seen.middleware';
 
 @Module({
   imports: [
@@ -52,12 +55,18 @@ import { RequestContextMiddleware } from './common/context.middleware';
     BudgetsModule,
     StatsModule,
     AttachmentsModule,
+    MetaModule,
+    WeeklySummariesModule,
     HealthModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    LastSeenMiddleware,
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestContextMiddleware).forRoutes('*');
+    consumer.apply(LastSeenMiddleware).forRoutes('*');
   }
 }

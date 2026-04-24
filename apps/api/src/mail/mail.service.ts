@@ -37,4 +37,26 @@ export class MailService {
     await this.transporter.sendMail({ from: this.from, to: email, subject, text });
     this.logger.log(`Invite mailed to ${email}`);
   }
+
+  /** Send an email-change OTP to the NEW address. */
+  async sendEmailChangeOtp(newEmail: string, code: string): Promise<void> {
+    const subject = `Confirm your new Nayanam email: ${code}`;
+    const text = `Your email-change confirmation code is ${code}. It expires in 10 minutes.\n\nIf you did not request this change, you can ignore this email.`;
+    await this.transporter.sendMail({ from: this.from, to: newEmail, subject, text });
+    this.logger.log(`Email-change OTP mailed to ${newEmail}`);
+  }
+
+  /** Tripwire notice to the OLD address after an email change completes. */
+  async sendEmailChangedNotice(oldEmail: string, newEmailMasked: string): Promise<void> {
+    const subject = 'Your Nayanam email was changed';
+    const text = `Your Nayanam account email was just changed to ${newEmailMasked}.\n\nIf this was you, no action is needed. If not, contact support immediately.`;
+    await this.transporter.sendMail({ from: this.from, to: oldEmail, subject, text });
+    this.logger.log(`Email-change notice mailed to ${oldEmail}`);
+  }
+
+  /** Generic send for notification-dispatch email fan-out + weekly summary. */
+  async sendGeneric(email: string, subject: string, text: string, html?: string): Promise<void> {
+    await this.transporter.sendMail({ from: this.from, to: email, subject, text, html });
+    this.logger.log(`Generic mail sent to ${email}`);
+  }
 }

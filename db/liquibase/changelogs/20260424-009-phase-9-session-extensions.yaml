@@ -1,0 +1,65 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-sessions-device-metadata
+      author: nayanam
+      comment: |
+        Phase 9 — session device metadata for the "trusted devices" UI.
+        Adds device_name, device_kind (CHECK enum), last_seen_at, and
+        ip_address_hash (SHA-256 of request.ip + SESSION_SALT, not reversible).
+        Partial index on (user_id, last_seen_at DESC) WHERE revoked_at IS NULL
+        to back the per-user sessions listing.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: sessions
+      changes:
+        - addColumn:
+            tableName: sessions
+            columns:
+              - column:
+                  name: device_name
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: device_kind
+                  type: TEXT
+                  defaultValue: 'other'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_seen_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ip_address_hash
+                  type: TEXT
+                  constraints:
+                    nullable: true
+        - sql:
+            sql: |
+              ALTER TABLE sessions
+                ADD CONSTRAINT ck_sessions_device_kind
+                  CHECK (device_kind IN ('web','ios','android','other'));
+              CREATE INDEX idx_sessions_user_last_seen_active
+                ON sessions (user_id, last_seen_at DESC)
+                WHERE revoked_at IS NULL;
+      rollback:
+        - sql:
+            sql: |
+              DROP INDEX IF EXISTS idx_sessions_user_last_seen_active;
+              ALTER TABLE sessions DROP CONSTRAINT IF EXISTS ck_sessions_device_kind;
+        - dropColumn:
+            tableName: sessions
+            columnName: ip_address_hash
+        - dropColumn:
+            tableName: sessions
+            columnName: last_seen_at
+        - dropColumn:
+            tableName: sessions
+            columnName: device_kind
+        - dropColumn:
+            tableName: sessions
+            columnName: device_name

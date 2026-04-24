@@ -11,3 +11,5 @@ export * from './budgets';
 export * from './notifications';
 export * from './attachments';
 export * from './stats';
+export * from './me';
+export * from './households';

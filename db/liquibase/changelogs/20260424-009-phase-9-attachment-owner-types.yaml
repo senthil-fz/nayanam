@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-attachment-owner-types
+      author: nayanam
+      comment: |
+        Phase 9 — widen attachments.owner_type CHECK to include 'user' and
+        'household' so Settings can attach avatars via the same presign/
+        finalize pipeline. Drops and recreates the Phase 8 constraint.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: attachments
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_owner_type;
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_owner_type
+                  CHECK (owner_type IN ('transaction','user','household'));
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE attachments DROP CONSTRAINT IF EXISTS ck_attachments_owner_type;
+              ALTER TABLE attachments
+                ADD CONSTRAINT ck_attachments_owner_type
+                  CHECK (owner_type IN ('transaction'));

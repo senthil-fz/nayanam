@@ -756,12 +756,14 @@ export class BudgetsService {
     if (!pushes || pushes.length === 0) return;
     for (const p of pushes) {
       try {
+        // Phase 9: category='budgets' so push_budgets_enabled gates delivery.
         await this.push.send(p.userId, {
           title: p.title,
           body: p.body,
           data: p.data,
           sound: 'default',
           priority: 'high',
+          category: 'budgets',
         });
       } catch (err: unknown) {
         this.logger.warn(`budget-threshold push failed user_id=${p.userId} error=${String(err)}`);

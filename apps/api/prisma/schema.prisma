@@ -19,18 +19,22 @@ model User {
   id                  String   @id @db.VarChar(26)
   email               String   @unique @db.Citext
   name                String?
-  primaryCurrencyCode String   @default("USD") @map("primary_currency_code") @db.Char(3)
+  primaryCurrencyCode String?  @map("primary_currency_code") @db.Char(3)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  sessions           Session[]
-  memberships        HouseholdMember[]
-  invitesSent        HouseholdInvite[]   @relation("InvitedBy")
-  notificationTokens NotificationToken[]
-  notifications      Notification[]
-  idempotencyKeys    IdempotencyKey[]
-  eventsActed        Event[]             @relation("EventActor")
-  attachmentsCreated Attachment[]        @relation("AttachmentCreatedBy")
+  sessions                 Session[]
+  memberships              HouseholdMember[]
+  invitesSent              HouseholdInvite[]   @relation("InvitedBy")
+  notificationTokens       NotificationToken[]
+  notifications            Notification[]
+  idempotencyKeys          IdempotencyKey[]
+  eventsActed              Event[]             @relation("EventActor")
+  attachmentsCreated       Attachment[]        @relation("AttachmentCreatedBy")
+  notificationPreferences  UserNotificationPreferences?
+  security                 UserSecurity?
+  emailChangeRequests      EmailChangeRequest[]
+  weeklySummarySends       WeeklySummarySend[]
 
   @@map("users")
 }
@@ -59,6 +63,10 @@ model Session {
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
   lastUsedAt       DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deviceName       String?   @map("device_name")
+  deviceKind       String    @default("other") @map("device_kind")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  ipAddressHash    String?   @map("ip_address_hash")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -70,6 +78,8 @@ model Household {
   id                  String    @id @db.VarChar(26)
   name                String
   defaultCurrencyCode String    @default("USD") @map("default_currency_code") @db.Char(3)
+  iconToken           String?   @map("icon_token")
+  colorToken          String?   @map("color_token")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
@@ -441,5 +451,67 @@ model Attachment {
   @@index([householdId, createdAt(sort: Desc)], map: "idx_attachments_household_created")
   @@index([createdBy], map: "idx_attachments_created_by")
   @@map("attachments")
+}
+
+model UserNotificationPreferences {
+  userId                         String   @id @map("user_id") @db.VarChar(26)
+  pushBillsEnabled               Boolean  @default(true)  @map("push_bills_enabled")
+  pushBudgetsEnabled             Boolean  @default(true)  @map("push_budgets_enabled")
+  pushHouseholdActivityEnabled   Boolean  @default(true)  @map("push_household_activity_enabled")
+  pushWeeklySummaryEnabled       Boolean  @default(false) @map("push_weekly_summary_enabled")
+  emailBillsEnabled              Boolean  @default(false) @map("email_bills_enabled")
+  emailBudgetsEnabled            Boolean  @default(false) @map("email_budgets_enabled")
+  emailHouseholdActivityEnabled  Boolean  @default(false) @map("email_household_activity_enabled")
+  emailWeeklySummaryEnabled      Boolean  @default(true)  @map("email_weekly_summary_enabled")
+  createdAt                      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_notification_preferences")
+}
+
+model UserSecurity {
+  userId             String    @id @map("user_id") @db.VarChar(26)
+  biometricEnabled   Boolean   @default(false) @map("biometric_enabled")
+  pinHash            String?   @map("pin_hash")
+  pinLastChangedAt   DateTime? @map("pin_last_changed_at") @db.Timestamptz(6)
+  pinFailedAttempts  Int       @default(0) @map("pin_failed_attempts")
+  pinLockedUntil     DateTime? @map("pin_locked_until") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_security")
+}
+
+model EmailChangeRequest {
+  id             String    @id @db.VarChar(26)
+  userId         String    @map("user_id") @db.VarChar(26)
+  newEmail       String    @map("new_email") @db.Citext
+  otpHash        String    @map("otp_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(6)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lastSentAt     DateTime  @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_ecr_user_created")
+  @@map("email_change_requests")
+}
+
+model WeeklySummarySend {
+  id           String   @id @db.VarChar(26)
+  userId       String   @map("user_id") @db.VarChar(26)
+  weekEndingAt DateTime @map("week_ending_at") @db.Timestamptz(6)
+  sentAt       DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekEndingAt], map: "uq_wss_user_week")
+  @@map("weekly_summary_sends")
 }
 

@@ -157,14 +157,14 @@ Maps to prototype "Settings" screen, scoped per decisions above.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-901 | Profile: name, email, avatar upload, change email flow (re-OTP) | api, web, mobile | todo | |
-| F-902 | Currency (primary) per user + per household default | api, web, mobile | todo | |
-| F-903 | Appearance: light/dark/system (client-persisted) + accent color (client-persisted, picked from tokens) | web, mobile | todo | |
-| F-904 | Security: biometric unlock toggle (mobile), change-PIN (mobile), trusted devices list (revoke) | api, mobile | todo | |
-| F-905 | Notification preferences: channels (push, email) × categories (bills, budgets, household activity, weekly summary) | api, web, mobile | todo | |
-| F-906 | Weekly email summary job | api | todo | |
-| F-907 | Help / Contact / Terms + Sign out | web, mobile | todo | |
-| F-908 | Household management: members list, invite, role change, remove, leave, delete household | api, web, mobile | todo | |
+| F-901 | Profile: name, email, avatar upload, change email flow (re-OTP) | api, web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) |
+| F-902 | Currency (primary) per user + per household default | api, web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) |
+| F-903 | Appearance: light/dark/system (client-persisted) + accent color (client-persisted, picked from tokens) | web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) — web uses CSS vars; mobile uses RN Appearance + media strategy (NativeWind class-based dark:* palette is future) |
+| F-904 | Security: biometric unlock toggle (mobile), change-PIN (mobile), trusted devices list (revoke) | api, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) — argon2 PIN hashing; OTP-token escape hatch for forgot-PIN |
+| F-905 | Notification preferences: channels (push, email) × categories (bills, budgets, household activity, weekly summary) | api, web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) — push gating shipped; email dispatch gate is a compatibility layer (in-app notifications always write; bills/budgets email fan-out is a follow-up refactor) |
+| F-906 | Weekly email summary job | api | shipped | [spec](specs/2026-04-24-phase-9-settings.md) — Sunday 14:00 UTC cron + `weekly_summary_sends` dedupe |
+| F-907 | Help / Contact / Terms + Sign out | web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) |
+| F-908 | Household management: members list, invite, role change, remove, leave, delete household | api, web, mobile | shipped | [spec](specs/2026-04-24-phase-9-settings.md) — `DELETE /households/{id}/archive` sub-path; `HOUSEHOLD_LAST_OWNER` + `HOUSEHOLD_NOT_EMPTY` guards |
 
 ## Phase 10 — Tools: Loan Analyzer
 

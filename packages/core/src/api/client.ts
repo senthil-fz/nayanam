@@ -83,6 +83,28 @@ type BudgetsStatusResponse = ApiSchemas['BudgetsStatusResponse'];
 type BudgetSuggestionsResponse = ApiSchemas['BudgetSuggestionsResponse'];
 type BudgetHistoryResponse = ApiSchemas['BudgetHistoryResponse'];
 
+// Phase 9 — Settings (me / households / meta)
+type UpdateMeInput = ApiSchemas['UpdateMeInput'];
+type ChangeEmailRequestInput = ApiSchemas['ChangeEmailRequestInput'];
+type ChangeEmailRequestResponse = ApiSchemas['ChangeEmailRequestResponse'];
+type ChangeEmailVerifyInput = ApiSchemas['ChangeEmailVerifyInput'];
+type UpdateMemberRoleInput = ApiSchemas['UpdateMemberRoleInput'];
+type MeSessionsResponse = ApiSchemas['MeSessionsResponse'];
+type RevokeAllOtherSessionsResponse =
+  ApiSchemas['RevokeAllOtherSessionsResponse'];
+type MeSecurityResponse = ApiSchemas['MeSecurityResponse'];
+type UpdateMeSecurityInput = ApiSchemas['UpdateMeSecurityInput'];
+type VerifyPinInput = ApiSchemas['VerifyPinInput'];
+type VerifyPinResponse = ApiSchemas['VerifyPinResponse'];
+type VerifyOtpForSecurityInput = ApiSchemas['VerifyOtpForSecurityInput'];
+type VerifyOtpForSecurityResponse = ApiSchemas['VerifyOtpForSecurityResponse'];
+type NotificationPreferences = ApiSchemas['NotificationPreferences'];
+type PatchNotificationPreferencesInput =
+  ApiSchemas['PatchNotificationPreferencesInput'];
+type WeeklySummaryPreview = ApiSchemas['WeeklySummaryPreview'];
+type MetaLinksResponse = ApiSchemas['MetaLinksResponse'];
+type HouseholdUpdate = ApiSchemas['HouseholdUpdate'];
+
 type Bill = ApiSchemas['Bill'];
 type BillsPage = ApiSchemas['BillsPage'];
 type BillPaymentsPage = ApiSchemas['BillPaymentsPage'];
@@ -287,8 +309,120 @@ export function createApiClient(opts: ApiClientOptions) {
       request<ApiHousehold>('/households', { method: 'POST', body, crossHousehold: true }),
     getHousehold: (id: string) =>
       request<ApiHousehold>(`/households/${id}`, { crossHousehold: true }),
-    updateHousehold: (id: string, body: { name?: string; defaultCurrencyCode?: string }) =>
-      request<ApiHousehold>(`/households/${id}`, { method: 'PATCH', body, crossHousehold: true }),
+    updateHousehold: (id: string, body: HouseholdUpdate, idempotencyKey?: string) =>
+      request<ApiHousehold>(`/households/${id}`, {
+        method: 'PATCH',
+        body,
+        crossHousehold: true,
+        idempotencyKey,
+      }),
+    updateHouseholdMemberRole: (
+      id: string,
+      userId: string,
+      body: UpdateMemberRoleInput,
+      idempotencyKey?: string,
+    ) =>
+      request<ApiHouseholdMember>(
+        `/households/${id}/members/${userId}/role`,
+        {
+          method: 'PATCH',
+          body,
+          crossHousehold: true,
+          idempotencyKey,
+        },
+      ),
+    removeHouseholdMember: (id: string, userId: string, idempotencyKey?: string) =>
+      request<void>(`/households/${id}/members/${userId}`, {
+        method: 'DELETE',
+        crossHousehold: true,
+        idempotencyKey,
+      }),
+    leaveHousehold: (id: string, idempotencyKey?: string) =>
+      request<void>(`/households/${id}/leave`, {
+        method: 'POST',
+        crossHousehold: true,
+        idempotencyKey,
+      }),
+    deleteHousehold: (id: string, idempotencyKey?: string) =>
+      request<void>(`/households/${id}/archive`, {
+        method: 'DELETE',
+        crossHousehold: true,
+        idempotencyKey,
+      }),
+
+    // Me (Phase 9 extensions)
+    updateMe: (body: UpdateMeInput, idempotencyKey?: string) =>
+      request<ApiMe>('/me', { method: 'PATCH', body, idempotencyKey, crossHousehold: true }),
+    requestChangeEmail: (body: ChangeEmailRequestInput, idempotencyKey?: string) =>
+      request<ChangeEmailRequestResponse>('/me/change-email/request', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    verifyChangeEmail: (body: ChangeEmailVerifyInput, idempotencyKey?: string) =>
+      request<ApiMe>('/me/change-email/verify', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    listMeSessions: () =>
+      request<MeSessionsResponse>('/me/sessions', { crossHousehold: true }),
+    revokeMeSession: (sessionId: string, idempotencyKey?: string) =>
+      request<void>(`/me/sessions/${sessionId}`, {
+        method: 'DELETE',
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    revokeAllOtherMeSessions: (idempotencyKey?: string) =>
+      request<RevokeAllOtherSessionsResponse>('/me/sessions/revoke-all-others', {
+        method: 'POST',
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    getMeSecurity: () =>
+      request<MeSecurityResponse>('/me/security', { crossHousehold: true }),
+    updateMeSecurity: (body: UpdateMeSecurityInput, idempotencyKey?: string) =>
+      request<MeSecurityResponse>('/me/security', {
+        method: 'PATCH',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    verifyMePin: (body: VerifyPinInput, idempotencyKey?: string) =>
+      request<VerifyPinResponse>('/me/security/verify-pin', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    authOtpVerifyForSecurity: (body: VerifyOtpForSecurityInput) =>
+      request<VerifyOtpForSecurityResponse>(
+        '/auth/otp/verify-for-security',
+        { method: 'POST', body, anonymous: true, crossHousehold: true },
+      ),
+    getNotificationPreferences: () =>
+      request<NotificationPreferences>('/me/notification-preferences', {
+        crossHousehold: true,
+      }),
+    updateNotificationPreferences: (
+      body: PatchNotificationPreferencesInput,
+      idempotencyKey?: string,
+    ) =>
+      request<NotificationPreferences>('/me/notification-preferences', {
+        method: 'PATCH',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
+    getWeeklySummaryPreview: (params?: { weekEndingAt?: string }) =>
+      request<WeeklySummaryPreview>('/weekly-summaries/preview', {
+        query: params,
+        crossHousehold: true,
+      }),
+    getMetaLinks: () =>
+      request<MetaLinksResponse>('/meta/links', { crossHousehold: true }),
 
     listMembers: (id: string) =>
       request<{ items: ApiHouseholdMember[] }>(`/households/${id}/members`, { crossHousehold: true }),

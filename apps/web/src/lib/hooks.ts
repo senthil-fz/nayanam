@@ -5,6 +5,8 @@ import {
   makeBillHooks,
   makeBudgetHooks,
   makeCategoryHooks,
+  makeHouseholdHooks,
+  makeMeHooks,
   makeNotificationHooks,
   makeStatsHooks,
   makeTransactionHooks,
@@ -106,6 +108,38 @@ export const {
   useCategorySparkline,
   useSankey,
 } = makeStatsHooks(apiClient);
+
+// Phase 9 — Me (profile, sessions, security, notif prefs, meta).
+// `useMe` is already exposed from `makeAuthHooks` above; we expose the rest
+// of the `/me/*` surface here without re-exporting `useMe` to avoid shadowing.
+const meHooks = makeMeHooks(apiClient, {
+  isAuthed: () =>
+    Boolean(useAuthStore.getState().accessToken ?? useAuthStore.getState().refreshToken),
+});
+export const useUpdateMe = meHooks.useUpdateMe;
+export const useRequestChangeEmail = meHooks.useRequestChangeEmail;
+export const useVerifyChangeEmail = meHooks.useVerifyChangeEmail;
+export const useMeSessions = meHooks.useMeSessions;
+export const useRevokeMeSession = meHooks.useRevokeMeSession;
+export const useRevokeAllOtherSessions = meHooks.useRevokeAllOtherSessions;
+export const useMeSecurity = meHooks.useMeSecurity;
+export const useUpdateMeSecurity = meHooks.useUpdateMeSecurity;
+export const useVerifyMePin = meHooks.useVerifyMePin;
+export const useVerifyOtpForSecurity = meHooks.useVerifyOtpForSecurity;
+export const useNotificationPreferences = meHooks.useNotificationPreferences;
+export const useUpdateNotificationPreferences =
+  meHooks.useUpdateNotificationPreferences;
+export const useMetaLinks = meHooks.useMetaLinks;
+export const useWeeklySummaryPreview = meHooks.useWeeklySummaryPreview;
+
+// Phase 9 — Household management mutations.
+export const {
+  useUpdateHousehold,
+  useUpdateHouseholdMemberRole,
+  useRemoveHouseholdMember,
+  useLeaveHousehold,
+  useDeleteHousehold,
+} = makeHouseholdHooks(apiClient);
 
 export const {
   useBills,

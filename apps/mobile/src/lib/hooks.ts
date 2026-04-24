@@ -5,6 +5,8 @@ import {
   makeBillHooks,
   makeBudgetHooks,
   makeCategoryHooks,
+  makeHouseholdHooks,
+  makeMeHooks,
   makeNotificationHooks,
   makeStatsHooks,
   makeTransactionHooks,
@@ -12,6 +14,7 @@ import {
 import { apiClient, useAuthStore } from './api';
 
 export { useHomeStore } from '../stores/home';
+export { useAppearanceStore } from '../stores/appearance';
 
 export const {
   useMe,
@@ -26,6 +29,42 @@ export const {
   useCreateInvite,
   useRevokeInvite,
 } = makeAuthHooks(apiClient, useAuthStore);
+
+// Phase 9 `/me/*` surface. `isAuthed` gates the queries behind refresh-token
+// presence so /me doesn't fire before hydration — mirrors the Phase 1
+// `useMe` gating done inside `makeAuthHooks`.
+export const {
+  useMe: useMePhase9,
+  useUpdateMe,
+  useRequestChangeEmail,
+  useVerifyChangeEmail,
+  useMeSessions,
+  useRevokeMeSession,
+  useRevokeAllOtherSessions,
+  useMeSecurity,
+  useUpdateMeSecurity,
+  useVerifyMePin,
+  useVerifyOtpForSecurity,
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+  useMetaLinks,
+  useWeeklySummaryPreview,
+} = makeMeHooks(apiClient, {
+  isAuthed: () => {
+    const s = useAuthStore.getState();
+    return Boolean(s.accessToken ?? s.refreshToken);
+  },
+});
+
+// Phase 9 household-mutation surface. Phase 1 `makeAuthHooks` continues to
+// own the household READ hooks (listHouseholds, members, invites).
+export const {
+  useUpdateHousehold,
+  useUpdateHouseholdMemberRole,
+  useRemoveHouseholdMember,
+  useLeaveHousehold,
+  useDeleteHousehold,
+} = makeHouseholdHooks(apiClient);
 
 export const {
   useAccounts,

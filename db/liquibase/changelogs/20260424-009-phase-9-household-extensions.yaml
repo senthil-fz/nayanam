@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-households-icon-color-archive
+      author: nayanam
+      comment: |
+        Phase 9 — add icon_token + color_token to households (Settings avatar /
+        tile customization). `default_currency_code` already exists (Phase 1);
+        `deleted_at` already exists (Phase 1) and is reused for archive
+        semantics — we do NOT add a separate archived_at to keep the soft-
+        delete/restore path singular.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: households
+      changes:
+        - addColumn:
+            tableName: households
+            columns:
+              - column:
+                  name: icon_token
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: color_token
+                  type: TEXT
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: households
+            columnName: color_token
+        - dropColumn:
+            tableName: households
+            columnName: icon_token

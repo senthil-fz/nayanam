@@ -311,6 +311,7 @@ export class BillSchedulerService {
         : `Bill overdue: ${r.name}`;
     const body = pushBodyFor(type, r.next_due_at, now, r.amount_minor, r.currency_code);
     for (const n of notificationRows) {
+      // Phase 9: category='bills' so push_bills_enabled gates delivery.
       await this.push.send(n.userId, {
         title,
         body,
@@ -322,6 +323,7 @@ export class BillSchedulerService {
         },
         sound: 'default',
         priority: 'high',
+        category: 'bills',
       });
     }
   }

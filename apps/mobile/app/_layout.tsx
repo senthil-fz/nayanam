@@ -6,37 +6,34 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { focusManager } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { AppState, View, Text, Pressable } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { useAuthStore } from '../src/lib/api';
-import { getBiometricEnabled, promptBiometric } from '../src/lib/biometric';
 import { persistOptions, queryClient } from '../src/lib/query-client';
 import {
   installBillPushHandler,
   installBillPushResponseListener,
 } from '../src/lib/push-handlers';
+import {
+  AppearanceProvider,
+  useApplyAppearanceEffect,
+} from '../src/lib/appearance';
+import { UnlockGate } from '../src/features/settings/security/UnlockGate';
 
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
-  const [unlocked, setUnlocked] = useState(true);
   const router = useRouter();
   const segments = useSegments();
   const refreshToken = useAuthStore((s) => s.refreshToken);
-  const appStateRef = useRef(AppState.currentState);
 
-  // Phase 5: install the foreground bill-push handler + tap router once.
-  // Both are idempotent — installing twice is harmless — but we still gate
-  // on mount so StrictMode double-invoke doesn't stack listeners.
+  // Phase 5 push handlers — idempotent install.
   useEffect(() => {
     installBillPushHandler();
     const sub = installBillPushResponseListener();
     return () => sub.remove();
   }, []);
 
-  // AppState → TanStack Query focus bridge. Pauses every query (including
-  // the notification bell's 60s poll) while the app is backgrounded and
-  // resumes them on foreground. Runs once at root mount so every query
-  // benefits without per-screen wiring.
+  // AppState → TanStack Query focus bridge.
   useEffect(() => {
     focusManager.setFocused(AppState.currentState === 'active');
     const sub = AppState.addEventListener('change', (state) => {
@@ -45,9 +42,11 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Wait for zustand-persist hydration
+  // Wait for zustand-persist hydration.
   useEffect(() => {
-    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+    const unsub = useAuthStore.persist.onFinishHydration(() =>
+      setHydrated(true),
+    );
     if (useAuthStore.persist.hasHydrated()) setHydrated(true);
     return unsub;
   }, []);
@@ -63,32 +62,6 @@ export default function RootLayout() {
     }
   }, [hydrated, refreshToken, segments, router]);
 
-  // Biometric unlock on foreground.
-  useEffect(() => {
-    if (!hydrated) return;
-    void (async () => {
-      const enabled = await getBiometricEnabled();
-      if (enabled && refreshToken) {
-        setUnlocked(false);
-        const ok = await promptBiometric();
-        setUnlocked(ok);
-      }
-    })();
-    const sub = AppState.addEventListener('change', async (next) => {
-      const prev = appStateRef.current;
-      appStateRef.current = next;
-      if (prev.match(/inactive|background/) && next === 'active') {
-        const enabled = await getBiometricEnabled();
-        if (enabled && refreshToken) {
-          setUnlocked(false);
-          const ok = await promptBiometric();
-          setUnlocked(ok);
-        }
-      }
-    });
-    return () => sub.remove();
-  }, [hydrated, refreshToken]);
-
   if (!hydrated) return null;
 
   return (
@@ -98,31 +71,24 @@ export default function RootLayout() {
           client={queryClient}
           persistOptions={persistOptions}
         >
-          <BottomSheetModalProvider>
-            <StatusBar style="auto" />
-            <Stack screenOptions={{ headerShown: false }} />
-            {!unlocked && (
-              <LockOverlay
-                onRetry={async () => setUnlocked(await promptBiometric())}
-              />
-            )}
-          </BottomSheetModalProvider>
+          <AppearanceProvider>
+            <AppearanceEffect>
+              <BottomSheetModalProvider>
+                <StatusBar style="auto" />
+                <UnlockGate>
+                  <Stack screenOptions={{ headerShown: false }} />
+                </UnlockGate>
+              </BottomSheetModalProvider>
+            </AppearanceEffect>
+          </AppearanceProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
 
-function LockOverlay({ onRetry }: { onRetry: () => void }) {
-  return (
-    <View className="absolute inset-0 items-center justify-center bg-bg">
-      <Text className="mb-4 text-2xl font-semibold text-text">Locked</Text>
-      <Pressable
-        onPress={onRetry}
-        className="rounded-md bg-accent px-4 py-2"
-      >
-        <Text className="text-white">Unlock</Text>
-      </Pressable>
-    </View>
-  );
+// Small wrapper so `useApplyAppearanceEffect` runs inside the provider.
+function AppearanceEffect({ children }: { children: ReactNode }) {
+  useApplyAppearanceEffect();
+  return <>{children}</>;
 }

@@ -44,9 +44,22 @@ export class AttachmentsService {
   // ---- mutations ----
 
   async presignUpload(input: PresignUploadDto): Promise<PresignUploadResponseDTO> {
-    this.assertRole(MEMBER);
     const householdId = getHouseholdOrThrow();
     const { userId } = getAuthOrThrow();
+
+    // Role gate varies by owner type.
+    if (input.ownerType === 'transaction') {
+      this.assertRole(MEMBER);
+    } else if (input.ownerType === 'user') {
+      if (input.ownerId !== userId) {
+        throw Errors.forbiddenRole('Only the owning user may upload a user avatar.');
+      }
+    } else if (input.ownerType === 'household') {
+      if (input.ownerId !== householdId) {
+        throw Errors.forbiddenRole('Household avatar owner must match the household header.');
+      }
+      this.assertRole(ADMIN);
+    }
 
     if (!ATTACHMENT_MIME_ALLOWLIST.includes(input.mime)) {
       throw Errors.attachmentMimeNotAllowed(input.mime);
@@ -92,7 +105,6 @@ export class AttachmentsService {
   }
 
   async finalize(id: string): Promise<AttachmentDTO> {
-    this.assertRole(MEMBER);
     const { userId } = getAuthOrThrow();
     const householdId = getHouseholdOrThrow();
 
@@ -101,9 +113,17 @@ export class AttachmentsService {
     });
     if (!row) throw Errors.notFound();
 
-    // Only creator or ADMIN+ may finalize.
-    if (row.createdBy !== userId && !this.hasRole(ADMIN)) {
-      throw Errors.forbiddenRole();
+    // Role gate mirrors presign.
+    if (row.ownerType === 'transaction') {
+      this.assertRole(MEMBER);
+      if (row.createdBy !== userId && !this.hasRole(ADMIN)) {
+        throw Errors.forbiddenRole();
+      }
+    } else if (row.ownerType === 'user') {
+      if (row.ownerId !== userId) throw Errors.forbiddenRole();
+    } else if (row.ownerType === 'household') {
+      if (row.ownerId !== householdId) throw Errors.forbiddenRole();
+      this.assertRole(ADMIN);
     }
     if (row.status === 'READY') {
       throw Errors.attachmentAlreadyFinalized();
@@ -175,6 +195,27 @@ export class AttachmentsService {
           updatedAt: new Date(),
         },
       });
+      // Avatar owners are "most-recent wins": soft-delete prior avatars
+      // atomically in the same finalize.
+      if (next.ownerType === 'user' || next.ownerType === 'household') {
+        await tx.attachment.updateMany({
+          where: {
+            householdId,
+            ownerType: next.ownerType,
+            ownerId: next.ownerId,
+            deletedAt: null,
+            NOT: { id: next.id },
+          },
+          data: { deletedAt: new Date(), updatedAt: new Date() },
+        });
+        await recordEvent(
+          tx,
+          householdId,
+          userId,
+          next.ownerType === 'user' ? 'user.avatar_changed' : 'household.avatar_changed',
+          { attachmentId: next.id },
+        );
+      }
       await recordEvent(tx, householdId, userId, 'attachment.uploaded', {
         attachmentId: next.id,
         ownerType: next.ownerType,
@@ -318,7 +359,29 @@ export class AttachmentsService {
       if (!tx) throw Errors.attachmentOwnerNotFound();
       return;
     }
-    // Forward-compat: enum currently limits to 'transaction', but keep a guard.
+    if (ownerType === 'user') {
+      const user = await this.prisma.user.findUnique({
+        where: { id: ownerId },
+        select: { id: true },
+      });
+      if (!user) throw Errors.attachmentOwnerNotFound();
+      // Ensure the owning user shares at least one household with the caller
+      // (household-scoped bucket path + access semantics depend on it).
+      const shared = await this.prisma.householdMember.findFirst({
+        where: { userId: ownerId, householdId },
+      });
+      if (!shared) throw Errors.attachmentOwnerNotFound();
+      return;
+    }
+    if (ownerType === 'household') {
+      const hh = await this.prisma.household.findFirst({
+        where: { id: ownerId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!hh) throw Errors.attachmentOwnerNotFound();
+      if (ownerId !== householdId) throw Errors.attachmentOwnerNotFound();
+      return;
+    }
     throw Errors.attachmentOwnerNotFound();
   }
 
@@ -421,6 +484,10 @@ function ownerKeySegment(ownerType: AttachmentOwnerType): string {
   switch (ownerType) {
     case 'transaction':
       return 'txn';
+    case 'user':
+      return 'user';
+    case 'household':
+      return 'household';
     default:
       return String(ownerType);
   }

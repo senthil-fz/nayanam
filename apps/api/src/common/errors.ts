@@ -317,4 +317,66 @@ export const Errors = {
       HttpStatus.SERVICE_UNAVAILABLE,
       details,
     ),
+  // --- Settings (Phase 9) ---
+  emailAlreadyInUse: () =>
+    new AppError('EMAIL_ALREADY_IN_USE', 'Email is already in use.', HttpStatus.CONFLICT),
+  emailChangeNotPending: () =>
+    new AppError(
+      'EMAIL_CHANGE_NOT_PENDING',
+      'No pending email change request.',
+      HttpStatus.CONFLICT,
+    ),
+  emailChangeCooldown: (retryAfterSeconds: number) =>
+    new AppError(
+      'EMAIL_CHANGE_COOLDOWN',
+      'Too soon to resend. Please wait before requesting another code.',
+      HttpStatus.TOO_MANY_REQUESTS,
+      { retryAfterSeconds },
+    ),
+  otpInvalid: () =>
+    new AppError('OTP_INVALID', 'Invalid one-time code.', HttpStatus.BAD_REQUEST),
+  otpExpired: () =>
+    new AppError('OTP_EXPIRED', 'One-time code has expired.', HttpStatus.BAD_REQUEST),
+  otpMaxAttempts: () =>
+    new AppError(
+      'OTP_MAX_ATTEMPTS',
+      'Too many incorrect attempts. Request a new code.',
+      HttpStatus.BAD_REQUEST,
+    ),
+  householdLastOwner: (details?: Record<string, unknown>) =>
+    new AppError(
+      'HOUSEHOLD_LAST_OWNER',
+      'A household must always have at least one owner.',
+      HttpStatus.CONFLICT,
+      details,
+    ),
+  householdNotEmpty: () =>
+    new AppError(
+      'HOUSEHOLD_NOT_EMPTY',
+      'Cannot delete a household that still has other members or data.',
+      HttpStatus.CONFLICT,
+    ),
+  sessionCurrentCannotRevoke: () =>
+    new AppError(
+      'SESSION_CURRENT_CANNOT_REVOKE',
+      'Cannot revoke the current session. Sign out instead.',
+      HttpStatus.CONFLICT,
+    ),
+  pinInvalid: () =>
+    new AppError('PIN_INVALID', 'Incorrect PIN.', HttpStatus.FORBIDDEN),
+  pinNotSet: () =>
+    new AppError('PIN_NOT_SET', 'No PIN is set for this account.', HttpStatus.CONFLICT),
+  pinFormatInvalid: () =>
+    new AppError(
+      'PIN_FORMAT_INVALID',
+      'PIN must be exactly 6 digits.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  pinLocked: (retryAfterSeconds: number) =>
+    new AppError(
+      'PIN_LOCKED',
+      'PIN entry is temporarily locked after too many failed attempts.',
+      HttpStatus.LOCKED,
+      { retryAfterSeconds },
+    ),
 };

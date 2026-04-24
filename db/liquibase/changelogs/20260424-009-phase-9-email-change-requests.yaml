@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-009-phase-9-email-change-requests
+      author: nayanam
+      comment: |
+        Phase 9 — pending email-change OTP requests. Partial unique index on
+        (user_id) WHERE consumed_at IS NULL keeps at-most-one pending request
+        per user. OTP hash uses the same sha256 scheme as Phase 1 otp_codes.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: email_change_requests
+      changes:
+        - createTable:
+            tableName: email_change_requests
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_ecr_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: new_email,       type: CITEXT,      constraints: { nullable: false } }
+              - column: { name: otp_hash,        type: TEXT,        constraints: { nullable: false } }
+              - column: { name: expires_at,      type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: consumed_at,     type: TIMESTAMPTZ }
+              - column: { name: failed_attempts, type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: last_sent_at,    type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: created_at,      type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_ecr_user_pending
+                ON email_change_requests (user_id)
+                WHERE consumed_at IS NULL;
+              CREATE INDEX idx_ecr_user_created
+                ON email_change_requests (user_id, created_at DESC);
+      rollback:
+        - sql:
+            sql: |
+              DROP INDEX IF EXISTS idx_ecr_user_created;
+              DROP INDEX IF EXISTS uq_ecr_user_pending;
+        - dropTable:
+            tableName: email_change_requests

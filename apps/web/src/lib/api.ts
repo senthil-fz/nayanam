@@ -3,9 +3,11 @@
 
 import {
   createApiClient,
+  createAppearanceStore,
   createAuthStore,
   createHomeStore,
   type ApiClient,
+  type AppearanceState,
   type AuthState,
   type HomeState,
 } from '@nayanam/core';
@@ -27,6 +29,9 @@ function makeWebStorage<T>(): PersistStorage<T> {
 
 export const useAuthStore = createAuthStore(makeWebStorage<AuthState>());
 export const useHomeStore = createHomeStore(makeWebStorage<HomeState>());
+export const useAppearanceStore = createAppearanceStore(
+  makeWebStorage<AppearanceState>(),
+);
 
 export const apiClient: ApiClient = createApiClient({
   baseUrl: BASE_URL,
