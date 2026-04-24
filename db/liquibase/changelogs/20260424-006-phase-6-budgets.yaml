@@ -1,0 +1,191 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-006-phase-6-budgets
+      author: nayanam
+      comment: |
+        Phase 6 — budgets + budget_threshold_notifications tables.
+
+        `budgets` models a per-household spending ceiling scoped to either the
+        household as a whole or a single EXPENSE category. Scope ↔ category_id
+        coupling is enforced at the DB level via ck_budgets_scope_category so
+        the invariant holds even if the service layer regresses. amount_minor
+        is guaranteed positive by ck_budgets_amount_positive.
+
+        The partial unique index ux_budgets_household_scope_category_active
+        enforces "at most one active budget per (household, scope, currency,
+        category)" — HOUSEHOLD rows coalesce category_id to the sentinel string
+        '__HOUSEHOLD__' so the tuple is unique across the combined space.
+
+        `budget_threshold_notifications` is an immutable dedupe log: one row
+        per (budget_id, period_start, threshold_percent). The UNIQUE index is
+        the source of truth for "this threshold has already fired this period"
+        — scheduler and real-time evaluator both use INSERT ... ON CONFLICT
+        DO NOTHING against it. No soft-delete.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: budgets
+      changes:
+        - createTable:
+            tableName: budgets
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_budgets_household
+                    references: households(id)
+                    deleteCascade: true
+              - column: { name: name, type: TEXT, constraints: { nullable: false } }
+              - column: { name: scope, type: TEXT, constraints: { nullable: false } }
+              - column:
+                  name: category_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_budgets_category
+                    references: categories(id)
+                    deleteCascade: false
+              - column: { name: amount_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: currency_code, type: CHAR(3), constraints: { nullable: false } }
+              - column: { name: period, type: TEXT, constraints: { nullable: false } }
+              - column: { name: rollover, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: status, type: TEXT, defaultValue: 'ACTIVE', constraints: { nullable: false } }
+              - column: { name: start_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: end_at, type: TIMESTAMPTZ }
+              - column: { name: display_order, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: archived_at, type: TIMESTAMPTZ }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_budgets_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_budgets_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_scope
+              CHECK (scope IN ('HOUSEHOLD','CATEGORY'));
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_period
+              CHECK (period IN ('WEEKLY','MONTHLY'));
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_status
+              CHECK (status IN ('ACTIVE','PAUSED'));
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_amount_positive
+              CHECK (amount_minor > 0);
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_scope_category
+              CHECK (
+                (scope = 'HOUSEHOLD' AND category_id IS NULL)
+                OR (scope = 'CATEGORY' AND category_id IS NOT NULL)
+              );
+        - sql:
+            sql: >
+              ALTER TABLE budgets ADD CONSTRAINT ck_budgets_name_len
+              CHECK (char_length(name) BETWEEN 1 AND 60);
+        - sql:
+            sql: >
+              CREATE INDEX idx_budgets_household_status_period
+              ON budgets (household_id, status, period)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_budgets_household_display_order
+              ON budgets (household_id, display_order)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_budgets_category_id
+              ON budgets (category_id)
+              WHERE category_id IS NOT NULL AND deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX ux_budgets_household_scope_category_active
+              ON budgets (
+                household_id,
+                scope,
+                currency_code,
+                COALESCE(category_id, '__HOUSEHOLD__')
+              )
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+
+        - createTable:
+            tableName: budget_threshold_notifications
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_btn_household
+                    references: households(id)
+                    deleteCascade: true
+              - column:
+                  name: budget_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_btn_budget
+                    references: budgets(id)
+                    deleteCascade: false
+              - column: { name: period_start, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: threshold_percent, type: SMALLINT, constraints: { nullable: false } }
+              - column: { name: fired_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column:
+                  name: notification_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_btn_notification
+                    references: notifications(id)
+                    deleteCascade: true
+        - sql:
+            sql: >
+              ALTER TABLE budget_threshold_notifications
+              ADD CONSTRAINT ck_btn_threshold_percent
+              CHECK (threshold_percent IN (50, 80, 100, 120));
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX ux_btn_budget_period_threshold
+              ON budget_threshold_notifications (budget_id, period_start, threshold_percent);
+        - sql:
+            sql: >
+              CREATE INDEX idx_btn_household_period
+              ON budget_threshold_notifications (household_id, period_start DESC);
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_btn_household_period;
+        - sql:
+            sql: DROP INDEX IF EXISTS ux_btn_budget_period_threshold;
+        - dropTable:
+            tableName: budget_threshold_notifications
+        - sql:
+            sql: DROP INDEX IF EXISTS ux_budgets_household_scope_category_active;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_budgets_category_id;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_budgets_household_display_order;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_budgets_household_status_period;
+        - dropTable:
+            tableName: budgets

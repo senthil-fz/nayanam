@@ -44,7 +44,7 @@ import {
 import { HomeHeader } from '../../src/features/home/HomeHeader';
 import { BalanceHero } from '../../src/features/home/BalanceHero';
 import { QuickActionsGrid } from '../../src/features/home/QuickActionsGrid';
-import { BudgetPlaceholder } from '../../src/features/home/BudgetPlaceholder';
+import { BudgetsWidget } from '../../src/features/home/BudgetsWidget';
 import { RecentActivity } from '../../src/features/home/RecentActivity';
 
 export default function HomeTab() {
@@ -131,6 +131,7 @@ export default function HomeTab() {
       },
     });
     void qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    void qc.invalidateQueries({ queryKey: ['budgets', 'status'] });
   };
 
   return (
@@ -150,7 +151,7 @@ export default function HomeTab() {
           onAddIncome={() => openAdd('INCOME')}
           onTransfer={openTransfer}
         />
-        <BudgetPlaceholder />
+        <BudgetsWidget canMutate={canMutate} />
         <RecentActivity
           accounts={accounts}
           categories={categories}

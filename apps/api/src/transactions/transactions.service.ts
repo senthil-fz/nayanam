@@ -3,6 +3,7 @@ import { Prisma, type Transaction as TransactionRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BalanceService } from '../accounts/balance.service';
 import { CategoriesService } from '../categories/categories.service';
+import { BudgetsService } from '../budgets/budgets.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
@@ -20,6 +21,7 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly balance: BalanceService,
     private readonly categories: CategoriesService,
+    private readonly budgets: BudgetsService,
   ) {}
 
   // ---- list / get ----
@@ -113,19 +115,40 @@ export class TransactionsService {
 
   async create(input: CreateInput): Promise<TransactionDTO> {
     this.assertRole(WRITE_ROLE);
-    const row = await this.prisma.$transaction(async (tx) => this.createWithin(tx, input));
+    const householdId = getHouseholdOrThrow();
+    const { row, pushes } = await this.prisma.$transaction(async (tx) => {
+      const created = await this.createWithin(tx, input);
+      const p = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [created.categoryId],
+        [created.currencyCode],
+      );
+      return { row: created, pushes: p };
+    });
+    await this.budgets.flushPushQueue(pushes);
     return toDTO(row);
   }
 
   async bulkCreate(items: CreateInput[]): Promise<{ items: TransactionDTO[] }> {
     this.assertRole(WRITE_ROLE);
-    const created = await this.prisma.$transaction(async (tx) => {
+    const householdId = getHouseholdOrThrow();
+    const { created, pushes } = await this.prisma.$transaction(async (tx) => {
       const out: TransactionRow[] = [];
       for (const it of items) {
         out.push(await this.createWithin(tx, it));
       }
-      return out;
+      const cats = out.map((r) => r.categoryId);
+      const currencies = out.map((r) => r.currencyCode);
+      const p = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        cats,
+        currencies,
+      );
+      return { created: out, pushes: p };
     });
+    await this.budgets.flushPushQueue(pushes);
     return { items: created.map(toDTO) };
   }
 
@@ -244,7 +267,7 @@ export class TransactionsService {
     const existing = await this.findOrThrow(id);
     if (existing.transferId) throw Errors.transactionBelongsToTransfer();
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, pushes } = await this.prisma.$transaction(async (tx) => {
       const changed: string[] = [];
       const before: Record<string, unknown> = {};
       const after: Record<string, unknown> = {};
@@ -365,9 +388,16 @@ export class TransactionsService {
         });
       }
       void newAccount;
-      return row;
+      const p = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [existing.categoryId, row.categoryId],
+        [existing.currencyCode, row.currencyCode],
+      );
+      return { updated: row, pushes: p };
     });
 
+    await this.budgets.flushPushQueue(pushes);
     return toDTO(updated);
   }
 
@@ -381,7 +411,7 @@ export class TransactionsService {
     if (existing.transferId) throw Errors.transactionBelongsToTransfer();
     if (existing.deletedAt) return toDTO(existing);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, pushes } = await this.prisma.$transaction(async (tx) => {
       const signed = existing.type === 'INCOME' ? existing.amountMinor : -existing.amountMinor;
       // Reverse.
       await this.balance.applyDelta(tx, existing.accountId, -signed, existing.occurredAt);
@@ -396,8 +426,15 @@ export class TransactionsService {
         amountMinor: existing.amountMinor.toString(),
         type: existing.type,
       });
-      return row;
+      const p = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        existing.householdId,
+        [existing.categoryId],
+        [existing.currencyCode],
+      );
+      return { updated: row, pushes: p };
     });
+    await this.budgets.flushPushQueue(pushes);
     return toDTO(updated);
   }
 
@@ -413,7 +450,7 @@ export class TransactionsService {
     if (!existing.deletedAt) return toDTO(existing);
     if (existing.transferId) throw Errors.transactionBelongsToTransfer();
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, pushes } = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.findFirst({
         where: { id: existing.accountId, householdId, deletedAt: null },
       });
@@ -433,8 +470,15 @@ export class TransactionsService {
         amountMinor: existing.amountMinor.toString(),
         type: existing.type,
       });
-      return row;
+      const p = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [existing.categoryId],
+        [existing.currencyCode],
+      );
+      return { updated: row, pushes: p };
     });
+    await this.budgets.flushPushQueue(pushes);
     return toDTO(updated);
   }
 

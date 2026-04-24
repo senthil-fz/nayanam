@@ -48,6 +48,18 @@ type PeriodEnum = ApiSchemas['PeriodEnum'];
 type NotificationUnreadCountResponse =
   ApiSchemas['NotificationUnreadCountResponse'];
 
+type Budget = ApiSchemas['Budget'];
+type BudgetsPage = ApiSchemas['BudgetsPage'];
+type BudgetScope = ApiSchemas['BudgetScope'];
+type BudgetStatus = ApiSchemas['BudgetStatus'];
+type CreateBudgetInput = ApiSchemas['CreateBudgetInput'];
+type UpdateBudgetInput = ApiSchemas['UpdateBudgetInput'];
+type ReorderBudgetsInput = ApiSchemas['ReorderBudgetsInput'];
+type ReorderBudgetsResponse = ApiSchemas['ReorderBudgetsResponse'];
+type BudgetsStatusResponse = ApiSchemas['BudgetsStatusResponse'];
+type BudgetSuggestionsResponse = ApiSchemas['BudgetSuggestionsResponse'];
+type BudgetHistoryResponse = ApiSchemas['BudgetHistoryResponse'];
+
 type Bill = ApiSchemas['Bill'];
 type BillsPage = ApiSchemas['BillsPage'];
 type BillPaymentsPage = ApiSchemas['BillPaymentsPage'];
@@ -60,6 +72,7 @@ type MarkBillPaidResponse = ApiSchemas['MarkBillPaidResponse'];
 type ReorderBillsInput = ApiSchemas['ReorderBillsInput'];
 type ReorderBillsResponse = ApiSchemas['ReorderBillsResponse'];
 type BillStatus = ApiSchemas['BillStatus'];
+// Budget aliases are declared above to avoid a forward-reference reshuffle.
 
 export type ApiError = {
   status: number;
@@ -429,6 +442,45 @@ export function createApiClient(opts: ApiClientOptions) {
     getBillsSummary: () => request<BillsSummaryResponse>('/bills/summary'),
     getBillsUpcoming: (days = 14) =>
       request<BillsUpcomingResponse>('/bills/upcoming', { query: { days } }),
+
+    // Budgets (household-scoped)
+    listBudgets: (params?: {
+      cursor?: string;
+      limit?: number;
+      scope?: BudgetScope;
+      status?: BudgetStatus;
+      includeArchived?: boolean;
+    }) => request<BudgetsPage>('/budgets', { query: params }),
+    getBudget: (id: string) => request<Budget>(`/budgets/${id}`),
+    createBudget: (body: CreateBudgetInput, idempotencyKey?: string) =>
+      request<Budget>('/budgets', { method: 'POST', body, idempotencyKey }),
+    updateBudget: (id: string, body: UpdateBudgetInput, idempotencyKey?: string) =>
+      request<Budget>(`/budgets/${id}`, { method: 'PATCH', body, idempotencyKey }),
+    archiveBudget: (id: string, idempotencyKey?: string) =>
+      request<Budget>(`/budgets/${id}`, { method: 'DELETE', idempotencyKey }),
+    restoreBudget: (id: string, idempotencyKey?: string) =>
+      request<Budget>(`/budgets/${id}/restore`, { method: 'POST', idempotencyKey }),
+    pauseBudget: (id: string, idempotencyKey?: string) =>
+      request<Budget>(`/budgets/${id}/pause`, { method: 'POST', idempotencyKey }),
+    resumeBudget: (id: string, idempotencyKey?: string) =>
+      request<Budget>(`/budgets/${id}/resume`, { method: 'POST', idempotencyKey }),
+    reorderBudgets: (body: ReorderBudgetsInput, idempotencyKey?: string) =>
+      request<ReorderBudgetsResponse>('/budgets/reorder', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    getBudgetsStatus: (params?: {
+      scope?: BudgetScope;
+      includeArchived?: boolean;
+      asOf?: string;
+    }) => request<BudgetsStatusResponse>('/budgets/status', { query: params }),
+    getBudgetsSuggest: () =>
+      request<BudgetSuggestionsResponse>('/budgets/suggest'),
+    getBudgetHistory: (id: string, periods = 6) =>
+      request<BudgetHistoryResponse>(`/budgets/${id}/history`, {
+        query: { periods },
+      }),
 
     // Generic escape hatch
     raw: request,

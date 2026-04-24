@@ -209,4 +209,58 @@ export const Errors = {
       'Only the latest non-deleted payment may be undone.',
       HttpStatus.CONFLICT,
     ),
+  // --- Budgets (Phase 6) ---
+  budgetAlreadyExists: (details?: Record<string, unknown>) =>
+    new AppError(
+      'BUDGET_ALREADY_EXISTS',
+      'An active budget already exists for this scope, currency, and category.',
+      HttpStatus.CONFLICT,
+      details,
+    ),
+  budgetCategoryTypeInvalid: () =>
+    new AppError(
+      'BUDGET_CATEGORY_TYPE_INVALID',
+      'Budget category must be of type EXPENSE.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetCategoryRequired: () =>
+    new AppError(
+      'BUDGET_CATEGORY_REQUIRED',
+      'categoryId is required when scope = CATEGORY.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetCategoryForbidden: () =>
+    new AppError(
+      'BUDGET_CATEGORY_FORBIDDEN',
+      'categoryId must be null when scope = HOUSEHOLD.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetCategoryArchived: () =>
+    new AppError(
+      'BUDGET_CATEGORY_ARCHIVED',
+      'Target category is archived.',
+      HttpStatus.CONFLICT,
+    ),
+  budgetCurrencyImmutable: () =>
+    new AppError(
+      'BUDGET_CURRENCY_IMMUTABLE',
+      'Budget currencyCode is immutable after creation.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetScopeImmutable: () =>
+    new AppError(
+      'BUDGET_SCOPE_IMMUTABLE',
+      'Budget scope, categoryId, and startAt are immutable after creation.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetPeriodImmutable: () =>
+    new AppError(
+      'BUDGET_PERIOD_IMMUTABLE',
+      'Budget period is immutable after creation.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  budgetAlreadyPaused: () =>
+    new AppError('BUDGET_ALREADY_PAUSED', 'Budget is already paused.', HttpStatus.CONFLICT),
+  budgetAlreadyActive: () =>
+    new AppError('BUDGET_ALREADY_ACTIVE', 'Budget is already active.', HttpStatus.CONFLICT),
 };

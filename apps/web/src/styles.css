@@ -13,6 +13,7 @@
   --color-border: rgba(14, 14, 16, 0.08);
   --color-positive: #0e9f6e;
   --color-negative: #e85a3c;
+  --color-warning: #b45309;
   --color-accent: #0a84ff;
   --color-accent-soft: #e6f0ff;
 
@@ -48,5 +49,6 @@
     --color-border: rgba(255, 255, 255, 0.08);
     --color-positive: #30d18a;
     --color-negative: #ff6b4a;
+    --color-warning: #f5b24a;
   }
 }

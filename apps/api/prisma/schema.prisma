@@ -85,6 +85,8 @@ model Household {
   notifications Notification[]
   bills         Bill[]
   billPayments  BillPayment[]
+  budgets       Budget[]
+  budgetThresholdNotifications BudgetThresholdNotification[]
 
   @@map("households")
 }
@@ -142,6 +144,7 @@ model Category {
   household    Household?    @relation(fields: [householdId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   bills        Bill[]
+  budgets      Budget[]
 
   @@index([householdId, displayOrder], map: "idx_categories_household_order")
   @@index([householdId, type, archivedAt], map: "idx_categories_household_type_archived")
@@ -246,6 +249,7 @@ model Notification {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  budgetThresholdNotifications BudgetThresholdNotification[]
 
   @@index([userId, readAt], map: "idx_notifications_user_read")
   @@index([userId, createdAt(sort: Desc)], map: "idx_notifications_user_created")
@@ -359,5 +363,54 @@ model BillPayment {
 
   @@index([householdId, billId, cycleDueAt(sort: Desc)], map: "idx_bill_payments_bill_cycle")
   @@map("bill_payments")
+}
+
+model Budget {
+  id           String    @id @db.VarChar(26)
+  householdId  String    @map("household_id") @db.VarChar(26)
+  name         String
+  scope        String
+  categoryId   String?   @map("category_id") @db.VarChar(26)
+  amountMinor  BigInt    @map("amount_minor")
+  currencyCode String    @map("currency_code") @db.Char(3)
+  period       String
+  rollover     Boolean   @default(false)
+  status       String    @default("ACTIVE")
+  startAt      DateTime  @default(now()) @map("start_at") @db.Timestamptz(6)
+  endAt        DateTime? @map("end_at") @db.Timestamptz(6)
+  displayOrder Int       @default(0) @map("display_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy    String    @map("created_by") @db.VarChar(26)
+  updatedBy    String    @map("updated_by") @db.VarChar(26)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household                     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category  Category?                     @relation(fields: [categoryId], references: [id])
+  thresholdNotifications BudgetThresholdNotification[]
+
+  @@index([householdId, status, period], map: "idx_budgets_household_status_period")
+  @@index([householdId, displayOrder], map: "idx_budgets_household_display_order")
+  @@index([categoryId], map: "idx_budgets_category_id")
+  @@map("budgets")
+}
+
+model BudgetThresholdNotification {
+  id               String   @id @db.VarChar(26)
+  householdId      String   @map("household_id") @db.VarChar(26)
+  budgetId         String   @map("budget_id") @db.VarChar(26)
+  periodStart      DateTime @map("period_start") @db.Timestamptz(6)
+  thresholdPercent Int      @map("threshold_percent") @db.SmallInt
+  firedAt          DateTime @default(now()) @map("fired_at") @db.Timestamptz(6)
+  notificationId   String   @map("notification_id") @db.VarChar(26)
+
+  household    Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  budget       Budget       @relation(fields: [budgetId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, periodStart, thresholdPercent], map: "ux_btn_budget_period_threshold")
+  @@index([householdId, periodStart(sort: Desc)], map: "idx_btn_household_period")
+  @@map("budget_threshold_notifications")
 }
 

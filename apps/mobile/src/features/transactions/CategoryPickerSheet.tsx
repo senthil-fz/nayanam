@@ -23,11 +23,16 @@ export type CategoryPickerSheetHandle = {
 type Props = {
   typeFilter?: 'INCOME' | 'EXPENSE';
   selectedId?: string | null;
+  /** Category ids to omit from the list (e.g. already covered by a budget). */
+  excludeIds?: readonly string[];
   onSelect: (category: Category) => void;
 };
 
 export const CategoryPickerSheet = forwardRef<CategoryPickerSheetHandle, Props>(
-  function CategoryPickerSheet({ typeFilter, selectedId, onSelect }, ref) {
+  function CategoryPickerSheet(
+    { typeFilter, selectedId, excludeIds, onSelect },
+    ref,
+  ) {
     const sheetRef = useRef<BottomSheetModal>(null);
     const snapPoints = useMemo(() => ['75%'], []);
 
@@ -39,10 +44,11 @@ export const CategoryPickerSheet = forwardRef<CategoryPickerSheetHandle, Props>(
     const query = useCategories({ type: typeFilter, includeArchived: false });
     const items = useMemo<Category[]>(() => {
       const all = query.data?.pages.flatMap((p) => p.items) ?? [];
+      const exclude = new Set(excludeIds ?? []);
       return all.filter(
-        (c) => c.type !== 'TRANSFER' && !c.archivedAt,
+        (c) => c.type !== 'TRANSFER' && !c.archivedAt && !exclude.has(c.id),
       );
-    }, [query.data]);
+    }, [query.data, excludeIds]);
 
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (

@@ -3,6 +3,7 @@ import { Prisma, type Transfer as TransferRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BalanceService } from '../accounts/balance.service';
 import { CategoriesService } from '../categories/categories.service';
+import { BudgetsService } from '../budgets/budgets.service';
 import { toDTO as txToDTO } from '../transactions/transactions.service';
 import type { TransactionDTO } from '../transactions/transactions.dto';
 import { Errors } from '../common/errors';
@@ -30,6 +31,7 @@ export class TransfersService {
     private readonly prisma: PrismaService,
     private readonly balance: BalanceService,
     private readonly categories: CategoriesService,
+    private readonly budgets: BudgetsService,
   ) {}
 
   async get(id: string): Promise<TransferBundle> {
@@ -166,6 +168,17 @@ export class TransfersService {
         destinationTransactionId: destId,
       });
 
+      // Transfer pair rows are excluded from budget spend sums (transfer_id
+      // IS NULL in the SUM predicate), so no thresholds can fire here. Still
+      // invoke the evaluator for consistency with TransactionsService — it
+      // re-confirms current period progress cheaply.
+      await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [transferCategoryId],
+        [currencyCode],
+      );
+
       return this.bundle(transfer, [sourceTx, destTx]);
     });
 
@@ -228,6 +241,13 @@ export class TransfersService {
         amountMinor: amount.toString(),
       });
 
+      await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [],
+        [existing.currencyCode],
+      );
+
       return this.bundle(updatedTransfer, refreshed);
       void pair;
     });
@@ -280,6 +300,13 @@ export class TransfersService {
         destinationAccountId: existing.destinationAccountId,
         amountMinor: amount.toString(),
       });
+
+      await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [],
+        [existing.currencyCode],
+      );
 
       return this.bundle(restored, refreshed);
     });

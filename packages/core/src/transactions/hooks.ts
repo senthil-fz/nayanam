@@ -52,6 +52,7 @@ function ensureKey<V extends { idempotencyKey?: string }>(vars: V): V {
 const transactionsRoot = ['transactions'] as const;
 const transfersRoot = ['transfers'] as const;
 const accountsRoot = ['accounts'] as const;
+const budgetsRoot = ['budgets'] as const;
 
 // Variables types — the input schema plus an optional idempotency key that
 // `onMutate` fills in. The key is a transport concern and deliberately not
@@ -112,6 +113,14 @@ function invalidateAfterMutation(
   // Phase 4: Home aggregates — invalidate broadly so any param variant is refetched.
   void qc.invalidateQueries({ queryKey: [...transactionsRoot, 'period-summary'] });
   void qc.invalidateQueries({ queryKey: [...accountsRoot, 'balance-history-all'] });
+  // Phase 6: transaction mutations change budget spend-per-period, so the
+  // Home widget + Settings → Budgets list must refetch. We invalidate the
+  // computed views (status/suggest) plus the list prefix — detail rows are
+  // unaffected by spend changes, but invalidating the whole ['budgets'] tree
+  // keeps the logic simple and matches the mutation-side invalidation policy.
+  void qc.invalidateQueries({ queryKey: [...budgetsRoot, 'status'] });
+  void qc.invalidateQueries({ queryKey: [...budgetsRoot, 'suggest'] });
+  void qc.invalidateQueries({ queryKey: budgetsRoot });
   for (const id of touchedAccountIds) {
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id, 'balance-history'] });
     void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });

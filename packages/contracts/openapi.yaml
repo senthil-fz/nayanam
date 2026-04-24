@@ -1531,6 +1531,354 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 
+  /budgets:
+    get:
+      operationId: listBudgets
+      summary: List budgets with filters
+      description: |
+        Cursor paginated. Order: displayOrder ASC, createdAt ASC. Archived
+        rows (archivedAt IS NOT NULL) are excluded unless
+        `includeArchived=true`. Any household member role is permitted.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: scope
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/BudgetScope' }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/BudgetStatus' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Budgets page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetsPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createBudget
+      summary: Create a budget
+      description: |
+        Creates a household-wide or per-category budget. Scope / categoryId
+        coupling is enforced in the service: scope=HOUSEHOLD with a non-null
+        categoryId returns BUDGET_CATEGORY_FORBIDDEN (422); scope=CATEGORY
+        with a null categoryId returns BUDGET_CATEGORY_REQUIRED (422). The
+        referenced category must be EXPENSE-typed (otherwise
+        BUDGET_CATEGORY_TYPE_INVALID, 422) and non-archived (otherwise
+        BUDGET_CATEGORY_ARCHIVED, 409). Duplicate active (scope, currency,
+        category) returns BUDGET_ALREADY_EXISTS (409). Roles: MEMBER+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBudgetInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /budgets/status:
+    get:
+      operationId: getBudgetsStatus
+      summary: Computed status for every active budget
+      description: |
+        Returns per-budget computed fields for the current period: spent,
+        effective ceiling (base + rollover carry-in), remaining, progress,
+        thresholds already fired, and booleans flags. Only ACTIVE,
+        non-deleted budgets are considered; archived rows are excluded
+        unless `includeArchived=true`. `asOf` defaults to now() UTC. All
+        monetary amounts are minor-unit bigint-safe decimal strings. Any
+        household member role is permitted.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: scope
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/BudgetScope' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+        - name: asOf
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: UTC instant at which to compute status. Defaults to now().
+      responses:
+        '200':
+          description: Budgets status snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetsStatusResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /budgets/suggest:
+    get:
+      operationId: getBudgetsSuggest
+      summary: Suggested per-category budgets based on trailing 30-day spend
+      description: |
+        Returns up to 5 EXPENSE categories with no active non-archived
+        budget in the household's default currency. `suggestedAmountMinor`
+        is the trailing 30-day spend rounded up by 10% to the next 1000
+        minor units (i.e. next 10 major units). Any household member role
+        is permitted.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Budget suggestions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetSuggestionsResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /budgets/reorder:
+    post:
+      operationId: reorderBudgets
+      summary: Reorder budgets (full-set)
+      description: |
+        Body carries the full desired ordering of non-archived budgets in
+        the household. Server normalizes displayOrder to dense 0..N-1 in
+        one transaction. Roles: ADMIN+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderBudgetsInput' }
+      responses:
+        '200':
+          description: New ordering
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReorderBudgetsResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /budgets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Budget ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getBudget
+      summary: Get one budget
+      tags: [budgets]
+      responses:
+        '200':
+          description: Budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateBudget
+      summary: Update mutable budget fields
+      description: |
+        Partial update. Mutable fields: name, amountMinor, rollover, endAt,
+        displayOrder. `scope` and `categoryId` are immutable
+        (BUDGET_SCOPE_IMMUTABLE 422); `currencyCode` is immutable
+        (BUDGET_CURRENCY_IMMUTABLE 422); `period` is immutable
+        (BUDGET_PERIOD_IMMUTABLE 422); `startAt` is immutable (included
+        under BUDGET_SCOPE_IMMUTABLE). On successful amount / rollover
+        change the server re-evaluates thresholds for the current period
+        synchronously. Roles: MEMBER+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateBudgetInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: archiveBudget
+      summary: Archive a budget
+      description: |
+        Archives the budget (sets archivedAt). Threshold-notification rows
+        are preserved for audit. Idempotent: re-archiving returns 200.
+        Roles: ADMIN+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Archived budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /budgets/{id}/history:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getBudgetHistory
+      summary: Per-period history for a budget
+      description: |
+        Returns the last N period buckets (newest-first) with effective
+        ceiling, spent, remaining, overspent flag, and thresholds fired
+        for each period. `periods` defaults to 6 and is capped at 24. Any
+        household member role is permitted.
+      tags: [budgets]
+      parameters:
+        - name: periods
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 6
+      responses:
+        '200':
+          description: Budget history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetHistoryResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /budgets/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreBudget
+      summary: Restore an archived budget
+      description: |
+        Clears archivedAt. Enforces the unique-active invariant; if a
+        currently-active budget already claims the same (scope, currency,
+        category) slot, returns BUDGET_ALREADY_EXISTS (409). Idempotent
+        when the budget is already active. Roles: ADMIN+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /budgets/{id}/pause:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: pauseBudget
+      summary: Pause a budget
+      description: |
+        Transitions status ACTIVE → PAUSED. If already PAUSED, returns
+        BUDGET_ALREADY_PAUSED (409). Paused budgets are skipped by the
+        scheduler and real-time threshold evaluator. Roles: MEMBER+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Paused budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /budgets/{id}/resume:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: resumeBudget
+      summary: Resume a paused budget
+      description: |
+        Transitions status PAUSED → ACTIVE. If already ACTIVE, returns
+        BUDGET_ALREADY_ACTIVE (409). Roles: MEMBER+.
+      tags: [budgets]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Resumed budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
   /notifications/unread-count:
     get:
       operationId: getNotificationsUnreadCount
@@ -1656,6 +2004,16 @@ components:
         - BILL_CURRENCY_IMMUTABLE
         - BILL_PAYMENT_NOT_LATEST
         - BILL_END_AT_BEFORE_NEXT_DUE
+        - BUDGET_ALREADY_EXISTS
+        - BUDGET_CATEGORY_TYPE_INVALID
+        - BUDGET_CATEGORY_REQUIRED
+        - BUDGET_CATEGORY_FORBIDDEN
+        - BUDGET_CATEGORY_ARCHIVED
+        - BUDGET_CURRENCY_IMMUTABLE
+        - BUDGET_SCOPE_IMMUTABLE
+        - BUDGET_PERIOD_IMMUTABLE
+        - BUDGET_ALREADY_PAUSED
+        - BUDGET_ALREADY_ACTIVE
 
     ErrorResponse:
       type: object
@@ -2905,6 +3263,348 @@ components:
               type: array
               items: { $ref: '#/components/schemas/BillPayment' }
 
+    BudgetScope:
+      type: string
+      enum: [HOUSEHOLD, CATEGORY]
+      description: |
+        HOUSEHOLD budgets apply to every EXPENSE transaction in the
+        matching currency; CATEGORY budgets apply only to EXPENSE
+        transactions on the referenced category.
+
+    BudgetStatus:
+      type: string
+      enum: [ACTIVE, PAUSED]
+
+    BudgetPeriod:
+      type: string
+      enum: [WEEKLY, MONTHLY]
+
+    Budget:
+      type: object
+      required:
+        - id
+        - householdId
+        - name
+        - scope
+        - categoryId
+        - amountMinor
+        - currencyCode
+        - period
+        - rollover
+        - status
+        - startAt
+        - endAt
+        - displayOrder
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: ULID.
+        householdId:
+          type: string
+          description: Owning household ULID.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        scope: { $ref: '#/components/schemas/BudgetScope' }
+        categoryId:
+          type: [string, 'null']
+          description: |
+            Non-null iff scope=CATEGORY; null iff scope=HOUSEHOLD. Service
+            layer enforces the coupling.
+        amountMinor:
+          type: string
+          description: |
+            Base ceiling in the budget currency's minor units, encoded as a
+            decimal string for bigint-safety. Always positive.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. Immutable after creation.
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        rollover:
+          type: boolean
+          description: |
+            When true, unused ceiling from the previous period is carried
+            into the current period (one period back only).
+        status: { $ref: '#/components/schemas/BudgetStatus' }
+        startAt:
+          type: string
+          format: date-time
+          description: |
+            Anchor for period arithmetic. For WEEKLY budgets its UTC
+            weekday defines week start; for MONTHLY budgets the period is
+            always the calendar month of now(). Immutable after creation.
+        endAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            UTC instant after which the budget stops enforcing. Null means
+            open-ended.
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Dense 0..N-1 ordering per household.
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the budget is user-archived; hidden from default lists.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateBudgetInput:
+      type: object
+      required: [name, scope, amountMinor, currencyCode, period]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        scope: { $ref: '#/components/schemas/BudgetScope' }
+        categoryId:
+          type: [string, 'null']
+          description: |
+            Required when scope=CATEGORY, must be null when scope=HOUSEHOLD
+            (enforced by the service with BUDGET_CATEGORY_REQUIRED /
+            BUDGET_CATEGORY_FORBIDDEN).
+        amountMinor:
+          type: string
+          description: |
+            Base ceiling in the budget currency's minor units, decimal
+            string. Must be > 0.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. Required on create; immutable thereafter.
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        rollover:
+          type: boolean
+          default: false
+        startAt:
+          type: string
+          format: date-time
+          description: |
+            Optional. Defaults to now() UTC on the server. Immutable after
+            creation.
+        endAt:
+          type: [string, 'null']
+          format: date-time
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    UpdateBudgetInput:
+      type: object
+      description: |
+        Partial update. Only `name`, `amountMinor`, `rollover`, `endAt`,
+        and `displayOrder` are mutable. `scope`, `categoryId`,
+        `currencyCode`, `period`, and `startAt` are immutable; sending
+        them returns the corresponding *_IMMUTABLE error.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        amountMinor:
+          type: string
+          description: Base ceiling, minor-unit decimal string. Must be > 0.
+        rollover:
+          type: boolean
+        endAt:
+          type: [string, 'null']
+          format: date-time
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderBudgetsEntry:
+      type: object
+      required: [id, displayOrder]
+      properties:
+        id: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderBudgetsInput:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items: { $ref: '#/components/schemas/ReorderBudgetsEntry' }
+
+    ReorderBudgetsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Budget' }
+
+    BudgetsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Budget' }
+
+    BudgetsStatusItem:
+      type: object
+      required:
+        - budget
+        - periodStart
+        - periodEnd
+        - effectiveAmountMinor
+        - spentMinor
+        - remainingMinor
+        - progressPercent
+        - thresholdsFired
+        - rolloverCarryInMinor
+        - isOverspent
+        - isOverThreshold
+      properties:
+        budget: { $ref: '#/components/schemas/Budget' }
+        periodStart:
+          type: string
+          format: date-time
+          description: UTC instant at the start of the current period (inclusive).
+        periodEnd:
+          type: string
+          format: date-time
+          description: UTC instant at the end of the current period (exclusive).
+        effectiveAmountMinor:
+          type: string
+          description: |
+            Base ceiling plus rollover carry-in for this period, minor-unit
+            decimal string.
+        spentMinor:
+          type: string
+          description: |
+            Sum of EXPENSE transaction amounts (excluding transfers) in the
+            matching scope for the current period, minor-unit decimal string.
+        remainingMinor:
+          type: string
+          description: |
+            Signed `effectiveAmountMinor - spentMinor`. Negative when
+            overspent. Minor-unit decimal string.
+        progressPercent:
+          type: integer
+          minimum: 0
+          description: |
+            `floor(spentMinor * 100 / effectiveAmountMinor)`, non-negative,
+            may exceed 100.
+        thresholdsFired:
+          type: array
+          description: |
+            Ordered list of threshold percentages already fired for this
+            period (subset of [50, 80, 100, 120]).
+          items:
+            type: integer
+        rolloverCarryInMinor:
+          type: string
+          description: |
+            Positive carry-in from the previous period (0 when rollover is
+            off or previous period overspent). Minor-unit decimal string.
+        isOverspent:
+          type: boolean
+          description: True when `spentMinor > effectiveAmountMinor`.
+        isOverThreshold:
+          type: boolean
+          description: True when any fired threshold is >= 100.
+
+    BudgetsStatusResponse:
+      type: object
+      required: [asOf, items]
+      properties:
+        asOf:
+          type: string
+          format: date-time
+          description: UTC instant at which the status was computed.
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BudgetsStatusItem' }
+
+    BudgetSuggestion:
+      type: object
+      required:
+        - categoryId
+        - categoryName
+        - suggestedAmountMinor
+        - currencyCode
+      properties:
+        categoryId: { type: string }
+        categoryName: { type: string }
+        suggestedAmountMinor:
+          type: string
+          description: |
+            Trailing 30-day spend scaled up by 10% and rounded up to the
+            next 1000 minor units. Minor-unit decimal string.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+
+    BudgetSuggestionsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BudgetSuggestion' }
+
+    BudgetHistoryPeriod:
+      type: object
+      required:
+        - periodStart
+        - periodEnd
+        - effectiveAmountMinor
+        - spentMinor
+        - remainingMinor
+        - isOverspent
+        - thresholdsFired
+      properties:
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+          description: Exclusive upper bound of the period (UTC).
+        effectiveAmountMinor:
+          type: string
+          description: Base ceiling + rollover carry-in for that period.
+        spentMinor:
+          type: string
+        remainingMinor:
+          type: string
+          description: Signed `effectiveAmountMinor - spentMinor`.
+        isOverspent:
+          type: boolean
+        thresholdsFired:
+          type: array
+          items:
+            type: integer
+
+    BudgetHistoryResponse:
+      type: object
+      required: [budgetId, periods]
+      properties:
+        budgetId:
+          type: string
+        periods:
+          type: array
+          description: Periods ordered newest-first.
+          items: { $ref: '#/components/schemas/BudgetHistoryPeriod' }
+
 security:
   - BearerAuth: []
 
@@ -2927,5 +3627,7 @@ tags:
     description: Atomic paired-write money movement between two household accounts.
   - name: bills
     description: Recurring bills and subscriptions with scheduled due dates and payment history.
+  - name: budgets
+    description: Household-wide and per-category spending ceilings with threshold notifications and per-period rollover.
   - name: notifications
     description: Per-user notification surfaces (unread counts, list, mark-read).

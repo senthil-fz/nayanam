@@ -18,6 +18,6 @@ import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
     HouseholdHeaderGuard,
     IdempotencyInterceptor,
   ],
-  exports: [BillsService, BillSchedulerService],
+  exports: [BillsService, BillSchedulerService, PushNotificationsService],
 })
 export class BillsModule {}

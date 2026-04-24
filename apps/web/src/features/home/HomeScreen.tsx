@@ -11,7 +11,7 @@ import { AddAccountDialog } from '../cards/AddAccountDialog';
 import { HomeHeader } from './HomeHeader';
 import { BalanceHero } from './BalanceHero';
 import { QuickActionsGrid } from './QuickActionsGrid';
-import { BudgetPlaceholder } from './BudgetPlaceholder';
+import { BudgetsWidget } from './BudgetsWidget';
 import { RecentActivity } from './RecentActivity';
 
 export function HomeScreen() {
@@ -83,7 +83,7 @@ export function HomeScreen() {
         onTransfer={openTransfer}
       />
 
-      <BudgetPlaceholder />
+      <BudgetsWidget activeHousehold={activeHousehold} canMutate={canMutate} />
 
       <RecentActivity
         accounts={accounts}

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Category as CategoryRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BudgetsService } from '../budgets/budgets.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
@@ -14,7 +15,10 @@ type AnyTx = Prisma.TransactionClient | PrismaService;
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly budgets: BudgetsService,
+  ) {}
 
   async list(params: {
     cursor?: string;
@@ -212,6 +216,15 @@ export class CategoriesService {
         key: existing.key,
         label: existing.label,
       });
+      // Cascade: auto-archive every active budget pinned to this category.
+      // Runs inside the same tx so the archive is atomic with the category
+      // archive; each archived budget emits its own `budget.auto_archived`.
+      await this.budgets.autoArchiveForCategory(
+        tx,
+        existing.householdId!,
+        id,
+        userId,
+      );
       return row;
     });
     return toDTO(updated);

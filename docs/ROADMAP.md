@@ -124,11 +124,11 @@ Glue between categories and spending.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-601 | `Budget` table: scope (household-wide or per-category), amountMinor, currencyCode, period (monthly/weekly), rollover flag | api | todo | |
-| F-602 | Budget endpoints + computed `spent` and `remaining` for current period | api | todo | |
-| F-603 | Budget threshold notifications (50/80/100%) with dedupe per period | api | todo | |
-| F-604 | Home budget widget wiring (replaces F-404 placeholder) | web, mobile | todo | |
-| F-605 | Settings > Budgets entry + per-category budget management screen | web, mobile | todo | |
+| F-601 | `Budget` table: scope (household-wide or per-category), amountMinor, currencyCode, period (monthly/weekly), rollover flag | api | shipped | [spec](specs/2026-04-24-phase-6-budgets.md) |
+| F-602 | Budget endpoints + computed `spent` and `remaining` for current period | api | shipped | [spec](specs/2026-04-24-phase-6-budgets.md) |
+| F-603 | Budget threshold notifications (50/80/100%) with dedupe per period | api | shipped | [spec](specs/2026-04-24-phase-6-budgets.md) — ladder includes 120% for overspend alerts |
+| F-604 | Home budget widget wiring (replaces F-404 placeholder) | web, mobile | shipped | [spec](specs/2026-04-24-phase-6-budgets.md) |
+| F-605 | Settings > Budgets entry + per-category budget management screen | web, mobile | shipped | [spec](specs/2026-04-24-phase-6-budgets.md) |
 
 ## Phase 7 — Stats / Analytics
 
