@@ -1,0 +1,1054 @@
+openapi: 3.1.0
+info:
+  title: Nayanam API
+  version: 0.1.0
+  description: |
+    Expense manager REST API. Source of truth for all request/response shapes.
+    Consumed by the web app and the mobile (Expo) app via generated TypeScript clients.
+  contact:
+    name: Nayanam maintainers
+    url: https://github.com/nayanam
+  license:
+    name: UNLICENSED
+    url: https://nayanam.app/license
+servers:
+  - url: http://127.0.0.1:3000/api/v1
+    description: Local development
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Service liveness check
+      tags: [meta]
+      security: []
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
+  /auth/otp/request:
+    post:
+      operationId: authOtpRequest
+      summary: Request an OTP code for the given email
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OtpRequestBody' }
+      responses:
+        '200':
+          description: OTP sent (always — email existence is not leaked)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OtpRequestResult' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  /auth/otp/verify:
+    post:
+      operationId: authOtpVerify
+      summary: Exchange an OTP for JWTs
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OtpVerifyBody' }
+      responses:
+        '200':
+          description: Token pair + user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /auth/refresh:
+    post:
+      operationId: authRefresh
+      summary: Rotate refresh token, issue a new token pair
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshBody' }
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      summary: Revoke the current session
+      tags: [auth]
+      responses:
+        '204': { description: Logged out }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /me:
+    get:
+      operationId: getMe
+      summary: Current user + household memberships
+      tags: [me]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /me/push-tokens:
+    post:
+      operationId: registerPushToken
+      summary: Register a device push token
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushTokenCreate' }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushToken' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /me/push-tokens/{id}:
+    delete:
+      operationId: deletePushToken
+      summary: Remove a device push token
+      tags: [me]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /households:
+    get:
+      operationId: listHouseholds
+      summary: Households the current user is a member of
+      tags: [households]
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HouseholdSummary' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createHousehold
+      summary: Create a household; caller becomes OWNER
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HouseholdCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Household' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /households/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getHousehold
+      summary: Fetch one household by id
+      tags: [households]
+      responses:
+        '200':
+          description: One household
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Household' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateHousehold
+      summary: Update a household's mutable fields
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HouseholdUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Household' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/members:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listHouseholdMembers
+      summary: List members of a household
+      tags: [households]
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HouseholdMember' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/invites:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listHouseholdInvites
+      summary: List pending household invites
+      tags: [households]
+      responses:
+        '200':
+          description: Pending invites
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HouseholdInvite' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createHouseholdInvite
+      summary: Invite a user to a household
+      tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HouseholdInviteCreate' }
+      responses:
+        '201':
+          description: Invite created; token returned once
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HouseholdInviteWithToken' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /households/{id}/invites/{inviteId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: inviteId
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: revokeHouseholdInvite
+      summary: Revoke a pending household invite
+      tags: [households]
+      responses:
+        '204': { description: Revoked }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts in the current household
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: When true, archived accounts are included in the result.
+      responses:
+        '200':
+          description: Accounts page, ordered by displayOrder ASC, createdAt ASC
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createAccount
+      summary: Create an account in the current household
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /accounts/summary:
+    get:
+      operationId: getAccountsSummary
+      summary: Per-currency totals across active accounts
+      description: Excludes archived and deleted accounts. No FX conversion — one bucket per currency.
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsSummaryResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /accounts/reorder:
+    post:
+      operationId: reorderAccounts
+      summary: Reorder accounts (full-set)
+      description: |
+        Body carries the full desired ordering of non-archived accounts in the
+        household. Server normalizes displayOrder to dense 0..N-1 in one transaction.
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderAccountsInput' }
+      responses:
+        '200':
+          description: New ordering
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReorderAccountsResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /accounts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Account ULID
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getAccount
+      summary: Get one account
+      tags: [accounts]
+      responses:
+        '200':
+          description: Account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateAccount
+      summary: Update mutable account fields
+      description: |
+        `type` and `currencyCode` are immutable post-create. Attempting to change
+        either returns ACCOUNT_FIELD_IMMUTABLE (422). Opening balance edits are
+        only permitted while the account has zero non-deleted transactions;
+        otherwise ACCOUNT_OPENING_BALANCE_LOCKED (409).
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: archiveAccount
+      summary: Archive (or hard-delete) an account
+      description: |
+        Archives the account (sets archivedAt). If the account has zero lifetime
+        transactions (including soft-deleted), behaves as a true delete and sets
+        deletedAt instead; in that case the account will no longer appear even
+        when includeArchived=true. Idempotent: re-archiving returns 200 with the
+        current Account.
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Archived (or hard-deleted) account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /accounts/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreAccount
+      summary: Restore an archived account
+      description: |
+        Clears archivedAt. Returns RESOURCE_NOT_FOUND if the account was
+        hard-deleted. Idempotent.
+      tags: [accounts]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /accounts/{id}/balance-history:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getAccountBalanceHistory
+      summary: Trailing N-month balance history
+      description: |
+        Returns exactly `months` points, ordered oldest→newest, one per month.
+        For each month `m`, `asOf` is 23:59:59.999Z of the last day of month `m`
+        (UTC); the current month uses `now()` instead. Buckets earlier than
+        `openingBalanceAt` report `openingBalanceMinor` unchanged.
+      tags: [accounts]
+      parameters:
+        - name: months
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 6
+      responses:
+        '200':
+          description: Balance history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BalanceHistoryResponse' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /invites/accept:
+    post:
+      operationId: acceptInvite
+      summary: Accept a household invite by token
+      tags: [households]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Joined household
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HouseholdSummary' }
+        '400': { $ref: '#/components/responses/Error' }
+
+components:
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: Optional idempotency key (opaque). Replays return the original response for 24h.
+    HouseholdId:
+      name: X-Household-Id
+      in: header
+      required: true
+      schema: { type: string }
+      description: ULID of the active household. Scopes every tenant-owned request.
+
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        timestamp: { type: string, format: date-time }
+
+    ErrorCode:
+      type: string
+      description: |
+        Stable machine-readable error code. Clients branch on this value, not
+        on HTTP status alone. Add new codes here before the backend emits them.
+      enum:
+        - VALIDATION_ERROR
+        - RESOURCE_NOT_FOUND
+        - FORBIDDEN_ROLE
+        - ACCOUNT_NICKNAME_TAKEN
+        - ACCOUNT_FIELD_IMMUTABLE
+        - ACCOUNT_OPENING_BALANCE_LOCKED
+        - ACCOUNT_ARCHIVED
+        - CURRENCY_UNSUPPORTED
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { $ref: '#/components/schemas/ErrorCode' }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+
+    Pagination:
+      type: object
+      description: |
+        Base shape for cursor-paginated list responses. Concrete list envelopes
+        (e.g. AccountsPage) compose this base via `allOf` with a typed `items`
+        array.
+      required: [nextCursor]
+      properties:
+        nextCursor:
+          type: [string, 'null']
+          description: |
+            Opaque cursor for the next page. `null` when there are no more
+            pages. Pass back verbatim as the `cursor` query parameter.
+
+    OtpRequestBody:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    OtpRequestResult:
+      type: object
+      required: [sent, expiresInSeconds]
+      properties:
+        sent: { type: boolean }
+        expiresInSeconds: { type: integer }
+
+    OtpVerifyBody:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email }
+        code: { type: string, minLength: 6, maxLength: 6 }
+
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, accessTokenExpiresAt]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        accessTokenExpiresAt: { type: string, format: date-time }
+
+    AuthSession:
+      allOf:
+        - $ref: '#/components/schemas/TokenPair'
+        - type: object
+          required: [user, households]
+          properties:
+            user: { $ref: '#/components/schemas/User' }
+            households:
+              type: array
+              items: { $ref: '#/components/schemas/HouseholdSummary' }
+
+    RefreshBody:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    User:
+      type: object
+      required: [id, email, primaryCurrencyCode, createdAt]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: [string, 'null'] }
+        primaryCurrencyCode: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Me:
+      type: object
+      required: [user, households]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        households:
+          type: array
+          items: { $ref: '#/components/schemas/HouseholdSummary' }
+
+    PushTokenCreate:
+      type: object
+      required: [platform, token]
+      properties:
+        platform: { type: string, enum: [ios, android, web] }
+        token: { type: string }
+        expoPushToken: { type: [string, 'null'] }
+
+    PushToken:
+      type: object
+      required: [id, platform, token, createdAt]
+      properties:
+        id: { type: string }
+        platform: { type: string, enum: [ios, android, web] }
+        token: { type: string }
+        expoPushToken: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    HouseholdRole:
+      type: string
+      enum: [OWNER, ADMIN, MEMBER, VIEWER]
+
+    HouseholdSummary:
+      type: object
+      required: [id, name, role, defaultCurrencyCode]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/HouseholdRole' }
+        defaultCurrencyCode: { type: string }
+
+    Household:
+      type: object
+      required: [id, name, defaultCurrencyCode, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        defaultCurrencyCode: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    HouseholdCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        defaultCurrencyCode: { type: string, minLength: 3, maxLength: 3 }
+
+    HouseholdUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        defaultCurrencyCode: { type: string, minLength: 3, maxLength: 3 }
+
+    HouseholdMember:
+      type: object
+      required: [id, userId, role, email, joinedAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        email: { type: string }
+        name: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/HouseholdRole' }
+        joinedAt: { type: string, format: date-time }
+
+    HouseholdInviteCreate:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/HouseholdRole' }
+
+    HouseholdInvite:
+      type: object
+      required: [id, email, role, expiresAt, createdAt]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { $ref: '#/components/schemas/HouseholdRole' }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        acceptedAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+
+    HouseholdInviteWithToken:
+      allOf:
+        - $ref: '#/components/schemas/HouseholdInvite'
+        - type: object
+          required: [token]
+          properties:
+            token: { type: string }
+
+    AccountType:
+      type: string
+      enum: [DEBIT, CREDIT, SAVINGS, CASH]
+      description: |
+        DEBIT covers checking/current/debit card; CREDIT covers credit cards
+        and lines of credit (typically negative or owed balance); SAVINGS is
+        a deposit/interest account; CASH is a wallet. LOAN / INVESTMENT are
+        deliberately out of scope for v1.
+
+    Account:
+      type: object
+      required:
+        - id
+        - householdId
+        - nickname
+        - type
+        - currencyCode
+        - institution
+        - last4
+        - colorToken
+        - iconToken
+        - openingBalanceMinor
+        - openingBalanceAt
+        - cachedBalanceMinor
+        - cachedBalanceAt
+        - displayOrder
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: ULID.
+        householdId:
+          type: string
+          description: Owning household ULID.
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 60
+        type: { $ref: '#/components/schemas/AccountType' }
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. Immutable after creation.
+        institution:
+          type: [string, 'null']
+          maxLength: 80
+        last4:
+          type: [string, 'null']
+          pattern: '^[0-9]{4}$'
+        colorToken:
+          type: string
+          description: Key into `account.colors` design token set.
+        iconToken:
+          type: string
+          description: Key into `account.icons` design token set.
+        openingBalanceMinor:
+          type: string
+          description: |
+            Signed integer amount in the account currency's minor units, encoded
+            as a decimal string for bigint-safety over JSON.
+        openingBalanceAt:
+          type: string
+          format: date-time
+          description: |
+            Timestamp at which `openingBalanceMinor` is the truth. Transactions
+            dated before this instant do not affect cached balance. UTC.
+        cachedBalanceMinor:
+          type: string
+          description: |
+            Denormalized current balance in minor units, maintained by the
+            BalanceService. String for bigint-safety.
+        cachedBalanceAt:
+          type: string
+          format: date-time
+          description: Timestamp of the last cached-balance recompute. UTC.
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Dense 0..N-1 ordering per household.
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the account is user-archived; hidden from default lists.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateAccountInput:
+      type: object
+      required: [nickname, type, currencyCode]
+      properties:
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 60
+        type: { $ref: '#/components/schemas/AccountType' }
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        institution:
+          type: [string, 'null']
+          maxLength: 80
+        last4:
+          type: [string, 'null']
+          pattern: '^[0-9]{4}$'
+        colorToken: { type: string }
+        iconToken: { type: string }
+        openingBalanceMinor:
+          type: string
+          description: |
+            Signed decimal-string minor-units amount. Defaults to "0" if omitted.
+        openingBalanceAt:
+          type: string
+          format: date-time
+          description: Defaults to `now()` if omitted. UTC.
+
+    UpdateAccountInput:
+      type: object
+      description: |
+        All fields optional. `type` and `currencyCode` are intentionally absent:
+        changing either returns ACCOUNT_FIELD_IMMUTABLE. Opening-balance fields
+        are only accepted while the account has zero non-deleted transactions.
+      properties:
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 60
+        institution:
+          type: [string, 'null']
+          maxLength: 80
+        last4:
+          type: [string, 'null']
+          pattern: '^[0-9]{4}$'
+        colorToken: { type: string }
+        iconToken: { type: string }
+        openingBalanceMinor: { type: string }
+        openingBalanceAt: { type: string, format: date-time }
+
+    AccountsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Account' }
+
+    AccountsSummaryBucket:
+      type: object
+      required: [currencyCode, totalMinor, accountCount]
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        totalMinor:
+          type: string
+          description: Sum of cachedBalanceMinor for active accounts in this currency (bigint-safe string).
+        accountCount:
+          type: integer
+          minimum: 0
+
+    AccountsSummaryResponse:
+      type: object
+      required: [byCurrency, totalAccounts, asOf]
+      properties:
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/AccountsSummaryBucket' }
+        totalAccounts:
+          type: integer
+          minimum: 0
+          description: Count of active (non-archived, non-deleted) accounts.
+        asOf:
+          type: string
+          format: date-time
+          description: Server time at which the summary was computed. UTC.
+
+    BalanceHistoryPoint:
+      type: object
+      required: [bucket, asOf, balanceMinor]
+      properties:
+        bucket:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          description: Month key "YYYY-MM" (UTC).
+        asOf:
+          type: string
+          format: date-time
+          description: |
+            End-of-month instant (UTC) for past months; `now()` for the current
+            month's point.
+        balanceMinor:
+          type: string
+          description: Account balance in minor units at `asOf`, as a bigint-safe decimal string.
+
+    BalanceHistoryResponse:
+      type: object
+      required: [accountId, currencyCode, points]
+      properties:
+        accountId: { type: string }
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        points:
+          type: array
+          description: Oldest→newest. Length equals the requested `months` window.
+          items: { $ref: '#/components/schemas/BalanceHistoryPoint' }
+
+    ReorderAccountsEntry:
+      type: object
+      required: [id, displayOrder]
+      properties:
+        id: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderAccountsInput:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items: { $ref: '#/components/schemas/ReorderAccountsEntry' }
+
+    ReorderAccountsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Account' }
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: meta
+    description: Service metadata and liveness probes.
+  - name: auth
+    description: Email+OTP authentication, refresh, and session revocation.
+  - name: me
+    description: Endpoints scoped to the authenticated user (profile, push tokens).
+  - name: households
+    description: Household tenants, members, and invites.
+  - name: accounts
+    description: Financial accounts owned by a household.

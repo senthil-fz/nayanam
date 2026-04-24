@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260423-001-baseline
+      author: nayanam
+      comment: Baseline — no-op. Marks the start of the schema history.
+      changes:
+        - tagDatabase:
+            tag: baseline
+      rollback:
+        - empty

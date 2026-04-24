@@ -1,0 +1,14 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@nayanam/contracts": ["../../packages/contracts/src/index.ts"],
+      "@nayanam/core": ["../../packages/core/src/index.ts"],
+      "@nayanam/core/*": ["../../packages/core/src/*"],
+      "@nayanam/ui-tokens": ["../../packages/ui-tokens/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+}

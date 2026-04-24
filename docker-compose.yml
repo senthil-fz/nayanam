@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: nayanam-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nayanam
+      POSTGRES_PASSWORD: nayanam
+      POSTGRES_DB: nayanam
+    ports:
+      - "5432:5432"
+    volumes:
+      - nayanam-pg-data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: nayanam-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: nayanam
+      MINIO_ROOT_PASSWORD: nayanam-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - nayanam-minio-data:/data
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: nayanam-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  liquibase:
+    image: liquibase/liquibase:4.29
+    profiles: ["migrate"]
+    depends_on:
+      - postgres
+    volumes:
+      - ./db/liquibase:/liquibase/changelog
+    command:
+      - --defaults-file=/liquibase/changelog/liquibase.properties
+      - --url=jdbc:postgresql://postgres:5432/nayanam
+      - --username=nayanam
+      - --password=nayanam
+      - --changelog-file=changelog-master.yaml
+      - update
+
+volumes:
+  nayanam-pg-data:
+  nayanam-minio-data:

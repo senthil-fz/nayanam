@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@nayanam/contracts": ["packages/contracts/src/index.ts"],
+      "@nayanam/core": ["packages/core/src/index.ts"],
+      "@nayanam/core/*": ["packages/core/src/*"],
+      "@nayanam/ui-tokens": ["packages/ui-tokens/src/index.ts"]
+    }
+  }
+}

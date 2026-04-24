@@ -1,0 +1,194 @@
+// Prisma schema is INTROSPECTED from the database (`prisma db pull`) after
+// Liquibase migrations have run. NEVER run `prisma migrate`.
+// This file is hand-authored to match the Phase 1 Liquibase changelog;
+// run `pnpm --filter @nayanam/api prisma:pull` after `pnpm dev:db:migrate` to
+// regenerate it from the live schema and confirm zero drift.
+
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native"]
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [citext]
+}
+
+model User {
+  id                  String   @id @db.VarChar(26)
+  email               String   @unique @db.Citext
+  name                String?
+  primaryCurrencyCode String   @default("USD") @map("primary_currency_code") @db.Char(3)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  sessions           Session[]
+  memberships        HouseholdMember[]
+  invitesSent        HouseholdInvite[]   @relation("InvitedBy")
+  notificationTokens NotificationToken[]
+  idempotencyKeys    IdempotencyKey[]
+  eventsActed        Event[]             @relation("EventActor")
+
+  @@map("users")
+}
+
+model OtpCode {
+  id         String    @id @db.VarChar(26)
+  email      String    @db.Citext
+  codeHash   String    @map("code_hash")
+  purpose    String
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([email, purpose, expiresAt], map: "idx_otp_codes_email_purpose")
+  @@map("otp_codes")
+}
+
+model Session {
+  id               String    @id @db.VarChar(26)
+  userId           String    @map("user_id") @db.VarChar(26)
+  refreshTokenHash String    @unique(map: "idx_sessions_refresh_hash") @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ip               String?   @db.Inet
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user")
+  @@map("sessions")
+}
+
+model Household {
+  id                  String    @id @db.VarChar(26)
+  name                String
+  defaultCurrencyCode String    @default("USD") @map("default_currency_code") @db.Char(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy           String?   @map("created_by") @db.VarChar(26)
+  updatedBy           String?   @map("updated_by") @db.VarChar(26)
+
+  members  HouseholdMember[]
+  invites  HouseholdInvite[]
+  events   Event[]
+  accounts Account[]
+
+  @@map("households")
+}
+
+model Account {
+  id                  String    @id @db.VarChar(26)
+  householdId         String    @map("household_id") @db.VarChar(26)
+  nickname            String
+  type                String
+  currencyCode        String    @map("currency_code") @db.Char(3)
+  institution         String?
+  last4               String?   @db.Char(4)
+  colorToken          String    @default("indigo") @map("color_token")
+  iconToken           String    @default("wallet") @map("icon_token")
+  openingBalanceMinor BigInt    @default(0) @map("opening_balance_minor")
+  openingBalanceAt    DateTime  @default(now()) @map("opening_balance_at") @db.Timestamptz(6)
+  cachedBalanceMinor  BigInt    @default(0) @map("cached_balance_minor")
+  cachedBalanceAt     DateTime  @default(now()) @map("cached_balance_at") @db.Timestamptz(6)
+  displayOrder        Int       @default(0) @map("display_order")
+  archivedAt          DateTime? @map("archived_at") @db.Timestamptz(6)
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy           String    @map("created_by") @db.VarChar(26)
+  updatedBy           String    @map("updated_by") @db.VarChar(26)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id])
+
+  @@index([householdId, displayOrder], map: "idx_accounts_household_display")
+  @@index([householdId, archivedAt], map: "idx_accounts_household_archived")
+  @@index([householdId], map: "idx_accounts_household")
+  @@map("accounts")
+}
+
+model HouseholdMember {
+  id          String   @id @db.VarChar(26)
+  householdId String   @map("household_id") @db.VarChar(26)
+  userId      String   @map("user_id") @db.VarChar(26)
+  role        String
+  joinedAt    DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId], map: "uq_household_members_household_user")
+  @@index([userId], map: "idx_hm_user")
+  @@map("household_members")
+}
+
+model HouseholdInvite {
+  id          String    @id @db.VarChar(26)
+  householdId String    @map("household_id") @db.VarChar(26)
+  email       String    @db.Citext
+  role        String
+  tokenHash   String    @unique @map("token_hash")
+  invitedBy   String    @map("invited_by") @db.VarChar(26)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@index([householdId], map: "idx_hi_household")
+  @@index([email], map: "idx_hi_email")
+  @@map("household_invites")
+}
+
+model NotificationToken {
+  id            String   @id @db.VarChar(26)
+  userId        String   @map("user_id") @db.VarChar(26)
+  platform      String
+  token         String
+  expoPushToken String?  @map("expo_push_token")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token], map: "uq_notification_tokens_user_token")
+  @@map("notification_tokens")
+}
+
+model IdempotencyKey {
+  key          String   @id
+  userId       String   @map("user_id") @db.VarChar(26)
+  method       String
+  path         String
+  statusCode   Int      @map("status_code")
+  responseHash String   @map("response_hash")
+  responseBody Json     @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("idempotency_keys")
+}
+
+model Event {
+  id          String   @id @db.VarChar(26)
+  householdId String   @map("household_id") @db.VarChar(26)
+  actorId     String?  @map("actor_id") @db.VarChar(26)
+  type        String
+  payload     Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("EventActor", fields: [actorId], references: [id])
+
+  @@index([householdId, createdAt(sort: Desc)], map: "idx_events_household_created")
+  @@map("events")
+}

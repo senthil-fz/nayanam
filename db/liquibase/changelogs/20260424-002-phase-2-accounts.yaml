@@ -1,0 +1,90 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-002-accounts
+      author: nayanam
+      comment: Phase 2 — Accounts & Cards. Household-scoped account entity with soft-delete, archive, cached balance.
+      changes:
+        - createTable:
+            tableName: accounts
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_accounts_household
+                    references: households(id)
+                    deleteCascade: false
+              - column: { name: nickname, type: TEXT, constraints: { nullable: false } }
+              - column: { name: type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: currency_code, type: CHAR(3), constraints: { nullable: false } }
+              - column: { name: institution, type: TEXT }
+              - column: { name: last4, type: CHAR(4) }
+              - column: { name: color_token, type: TEXT, defaultValue: 'indigo', constraints: { nullable: false } }
+              - column: { name: icon_token, type: TEXT, defaultValue: 'wallet', constraints: { nullable: false } }
+              - column: { name: opening_balance_minor, type: BIGINT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: opening_balance_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: cached_balance_minor, type: BIGINT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: cached_balance_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: display_order, type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: archived_at, type: TIMESTAMPTZ }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_accounts_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_accounts_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: accounts
+            indexName: idx_accounts_household_display
+            columns:
+              - column: { name: household_id }
+              - column: { name: display_order }
+        - createIndex:
+            tableName: accounts
+            indexName: idx_accounts_household_archived
+            columns:
+              - column: { name: household_id }
+              - column: { name: archived_at }
+        - createIndex:
+            tableName: accounts
+            indexName: idx_accounts_household
+            columns:
+              - column: { name: household_id }
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_accounts_household_nickname_active
+              ON accounts (household_id, lower(nickname))
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+        - sql:
+            sql: >
+              ALTER TABLE accounts
+              ADD CONSTRAINT ck_accounts_type
+              CHECK (type IN ('DEBIT','CREDIT','SAVINGS','CASH'));
+        - sql:
+            sql: >
+              ALTER TABLE accounts
+              ADD CONSTRAINT ck_accounts_last4
+              CHECK (last4 IS NULL OR last4 ~ '^[0-9]{4}$');
+        - sql:
+            sql: >
+              ALTER TABLE accounts
+              ADD CONSTRAINT ck_accounts_nickname_len
+              CHECK (char_length(nickname) BETWEEN 1 AND 60);
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS uq_accounts_household_nickname_active;
+        - dropTable:
+            tableName: accounts

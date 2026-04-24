@@ -1,0 +1,260 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-001-enable-citext
+      author: nayanam
+      comment: Enable citext for case-insensitive email columns.
+      changes:
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS citext;
+      rollback:
+        - sql:
+            sql: DROP EXTENSION IF EXISTS citext;
+
+  - changeSet:
+      id: 20260424-002-users
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: email, type: CITEXT, constraints: { nullable: false, unique: true } }
+              - column: { name: name, type: TEXT }
+              - column: { name: primary_currency_code, type: CHAR(3), defaultValue: 'USD', constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+
+  - changeSet:
+      id: 20260424-003-otp-codes
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: otp_codes
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: email, type: CITEXT, constraints: { nullable: false } }
+              - column: { name: code_hash, type: TEXT, constraints: { nullable: false } }
+              - column: { name: purpose, type: TEXT, constraints: { nullable: false } }
+              - column: { name: expires_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: consumed_at, type: TIMESTAMPTZ }
+              - column: { name: attempts, type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: otp_codes
+            indexName: idx_otp_codes_email_purpose
+            columns:
+              - column: { name: email }
+              - column: { name: purpose }
+              - column: { name: expires_at }
+
+  - changeSet:
+      id: 20260424-004-sessions
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: sessions
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_sessions_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: refresh_token_hash, type: TEXT, constraints: { nullable: false } }
+              - column: { name: user_agent, type: TEXT }
+              - column: { name: ip, type: INET }
+              - column: { name: expires_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: revoked_at, type: TIMESTAMPTZ }
+              - column: { name: last_used_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: sessions
+            indexName: idx_sessions_user
+            columns:
+              - column: { name: user_id }
+        - createIndex:
+            tableName: sessions
+            indexName: idx_sessions_refresh_hash
+            unique: true
+            columns:
+              - column: { name: refresh_token_hash }
+
+  - changeSet:
+      id: 20260424-005-households
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: households
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: name, type: TEXT, constraints: { nullable: false } }
+              - column: { name: default_currency_code, type: CHAR(3), defaultValue: 'USD', constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column: { name: created_by, type: VARCHAR(26) }
+              - column: { name: updated_by, type: VARCHAR(26) }
+
+  - changeSet:
+      id: 20260424-006-household-members
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: household_members
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_hm_household
+                    references: households(id)
+                    deleteCascade: true
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_hm_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: role, type: TEXT, constraints: { nullable: false } }
+              - column: { name: joined_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: household_members
+            columnNames: household_id, user_id
+            constraintName: uq_household_members_household_user
+        - createIndex:
+            tableName: household_members
+            indexName: idx_hm_user
+            columns:
+              - column: { name: user_id }
+
+  - changeSet:
+      id: 20260424-007-household-invites
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: household_invites
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_hi_household
+                    references: households(id)
+                    deleteCascade: true
+              - column: { name: email, type: CITEXT, constraints: { nullable: false } }
+              - column: { name: role, type: TEXT, constraints: { nullable: false } }
+              - column: { name: token_hash, type: TEXT, constraints: { nullable: false, unique: true } }
+              - column:
+                  name: invited_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_hi_inviter
+                    references: users(id)
+              - column: { name: expires_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: accepted_at, type: TIMESTAMPTZ }
+              - column: { name: revoked_at, type: TIMESTAMPTZ }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: household_invites
+            indexName: idx_hi_household
+            columns:
+              - column: { name: household_id }
+        - createIndex:
+            tableName: household_invites
+            indexName: idx_hi_email
+            columns:
+              - column: { name: email }
+
+  - changeSet:
+      id: 20260424-008-notification-tokens
+      author: nayanam
+      changes:
+        - createTable:
+            tableName: notification_tokens
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_nt_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: platform, type: TEXT, constraints: { nullable: false } }
+              - column: { name: token, type: TEXT, constraints: { nullable: false } }
+              - column: { name: expo_push_token, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: last_seen_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: notification_tokens
+            columnNames: user_id, token
+            constraintName: uq_notification_tokens_user_token
+
+  - changeSet:
+      id: 20260424-009-idempotency-keys
+      author: nayanam
+      comment: Table is provisioned here; interceptor wires up in Phase 3 (F-306).
+      changes:
+        - createTable:
+            tableName: idempotency_keys
+            columns:
+              - column: { name: key, type: TEXT, constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: user_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_idem_user
+                    references: users(id)
+                    deleteCascade: true
+              - column: { name: method, type: TEXT, constraints: { nullable: false } }
+              - column: { name: path, type: TEXT, constraints: { nullable: false } }
+              - column: { name: status_code, type: INTEGER, constraints: { nullable: false } }
+              - column: { name: response_hash, type: TEXT, constraints: { nullable: false } }
+              - column: { name: response_body, type: JSONB, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: expires_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+
+  - changeSet:
+      id: 20260424-010-events
+      author: nayanam
+      comment: Append-only activity log; writers land per-feature.
+      changes:
+        - createTable:
+            tableName: events
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_events_household
+                    references: households(id)
+                    deleteCascade: true
+              - column:
+                  name: actor_id
+                  type: VARCHAR(26)
+                  constraints:
+                    foreignKeyName: fk_events_actor
+                    references: users(id)
+              - column: { name: type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: payload, type: JSONB, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: events
+            indexName: idx_events_household_created
+            columns:
+              - column: { name: household_id }
+              - column: { name: created_at, descending: true }
