@@ -61,7 +61,7 @@ function ArchivedRow({ account }: { account: Account }) {
         accessibilityRole="button"
         accessibilityLabel={`Restore ${account.nickname}`}
         onPress={async () => {
-          await restore.mutateAsync();
+          await restore.mutateAsync({});
           hapticSuccess();
         }}
         style={{

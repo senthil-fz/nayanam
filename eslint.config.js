@@ -1,8 +1,7 @@
 // Shared ESLint flat config for the Nayanam monorepo.
 //
 // Leaf packages import `baseConfig` and `tsProjectConfig(dirname)` and append
-// their own overrides. `apps/mobile` is intentionally excluded — it is outside
-// the pnpm workspace right now.
+// their own overrides.
 
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
@@ -22,7 +21,6 @@ export const baseIgnores = {
     '**/*.gen.ts',
     '**/routeTree.gen.ts',
     '**/generated.ts',
-    'apps/mobile/**',
   ],
 };
 

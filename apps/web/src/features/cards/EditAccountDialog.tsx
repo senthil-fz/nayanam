@@ -102,13 +102,13 @@ export function EditAccountDialog({ open, account, onClose }: Props) {
   });
 
   const onArchive = () => {
-    archive.mutate(undefined, {
+    archive.mutate({}, {
       onSuccess: () => {
         onClose();
         toast.show(`Archived "${account.nickname}"`, {
           action: {
             label: 'Undo',
-            onClick: () => restore.mutate(),
+            onClick: () => restore.mutate({}),
           },
         });
       },

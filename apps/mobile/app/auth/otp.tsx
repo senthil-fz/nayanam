@@ -31,7 +31,7 @@ export default function OtpScreen() {
 
         {verify.isError && (
           <Text className="mt-2 text-sm text-negative">
-            {(verify.error as Error).message}
+            {verify.error.message}
           </Text>
         )}
 
@@ -41,9 +41,11 @@ export default function OtpScreen() {
             verify.mutate(
               { email: String(email), code },
               {
-                onSuccess: async () => {
-                  await registerForPushIfPossible();
-                  router.replace('/');
+                onSuccess: () => {
+                  void (async () => {
+                    await registerForPushIfPossible();
+                    router.replace('/');
+                  })();
                 },
               },
             )

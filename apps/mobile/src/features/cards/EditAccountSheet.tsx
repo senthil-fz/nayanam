@@ -35,7 +35,6 @@ import {
   InputField,
   LabeledField,
   TypeSegmented,
-  type AccountTypeValue,
 } from './AccountFormFields';
 import { TrashIcon } from './icons';
 
@@ -128,9 +127,10 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
           {
             text: 'Archive',
             style: 'destructive',
-            onPress: async () => {
+            onPress: () => {
+              void (async () => {
               try {
-                const archived = await archiveAccount.mutateAsync();
+                const archived = await archiveAccount.mutateAsync({});
                 hapticSuccess();
                 setArchivedBanner(archived);
                 sheetRef.current?.dismiss();
@@ -140,6 +140,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
                 hapticError();
                 console.warn('Archive failed', err);
               }
+              })();
             },
           },
         ],
@@ -149,7 +150,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
     const onUndo = async () => {
       if (!archivedBanner) return;
       try {
-        await restoreAccount.mutateAsync();
+        await restoreAccount.mutateAsync({});
         hapticSuccess();
         setArchivedBanner(null);
       } catch (err) {
@@ -222,7 +223,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
 
               <LabeledField label="Type" locked helper="Set at creation.">
                 <TypeSegmented
-                  value={(account?.type ?? 'DEBIT') as AccountTypeValue}
+                  value={(account?.type ?? 'DEBIT')}
                   onChange={() => {}}
                   disabled
                 />
@@ -282,7 +283,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
                     <InputField
                       value={displayOpening(field.value, account?.currencyCode ?? 'USD')}
                       onChange={(t) => {
-                        const cleaned = t.replace(/[^0-9.\-]/g, '');
+                        const cleaned = t.replace(/[^0-9.-]/g, '');
                         field.onChange(openingToMinor(cleaned, account?.currencyCode ?? 'USD'));
                       }}
                       keyboardType="decimal-pad"

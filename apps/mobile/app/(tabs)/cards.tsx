@@ -42,10 +42,9 @@ export default function CardsTab() {
 
   const accountsQuery = useAccounts({ includeArchived: showArchived });
 
-  const pages = accountsQuery.data?.pages ?? [];
   const allAccounts = useMemo<Account[]>(
-    () => pages.flatMap((p) => p.items),
-    [pages],
+    () => (accountsQuery.data?.pages ?? []).flatMap((p) => p.items),
+    [accountsQuery.data?.pages],
   );
   const activeAccounts = useMemo(
     () => allAccounts.filter((a) => !a.archivedAt),

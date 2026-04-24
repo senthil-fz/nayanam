@@ -25,7 +25,6 @@ import {
   InputField,
   LabeledField,
   TypeSegmented,
-  type AccountTypeValue,
 } from './AccountFormFields';
 import { CurrencyPicker } from './CurrencyPicker';
 import { ChevRIcon } from './icons';
@@ -165,7 +164,7 @@ export const AddAccountSheet = forwardRef<AddAccountSheetHandle, Props>(
                   name="type"
                   render={({ field }) => (
                     <TypeSegmented
-                      value={field.value as AccountTypeValue}
+                      value={field.value}
                       onChange={(v) => field.onChange(v)}
                     />
                   )}
@@ -303,7 +302,7 @@ function MinorAmountInput({
   const [display, setDisplay] = useState(() => minorToDisplay(value, currencyCode));
 
   const handle = (t: string) => {
-    const cleaned = t.replace(/[^0-9.\-]/g, '');
+    const cleaned = t.replace(/[^0-9.-]/g, '');
     setDisplay(cleaned);
     const minor = displayToMinor(cleaned, currencyCode);
     onChange(minor);

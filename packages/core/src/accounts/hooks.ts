@@ -1,5 +1,8 @@
 // Account TanStack Query hooks, shared by web + mobile.
-// Mutations auto-generate Idempotency-Key via crypto.randomUUID().
+//
+// Idempotency-Key is generated in `onMutate` and stashed on the mutation
+// variables object so a persisted/offline replay reuses the same key.
+// See `transactions/hooks.ts` for full rationale.
 
 import {
   useInfiniteQuery,
@@ -25,7 +28,23 @@ function genIdempotencyKey(): string {
   return `idk-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function ensureKey<V extends { idempotencyKey?: string }>(vars: V): V {
+  if (!vars.idempotencyKey) vars.idempotencyKey = genIdempotencyKey();
+  return vars;
+}
+
 const accountsRoot = ['accounts'] as const;
+
+export type CreateAccountVars = CreateAccountInputType & {
+  idempotencyKey?: string;
+};
+export type UpdateAccountVars = UpdateAccountInputType & {
+  idempotencyKey?: string;
+};
+export type ReorderAccountsVars = ReorderAccountsInputType & {
+  idempotencyKey?: string;
+};
+export type IdempotentAccountActionVars = { idempotencyKey?: string };
 
 export type UseAccountsOptions = { includeArchived?: boolean };
 
@@ -74,8 +93,11 @@ export function makeAccountHooks(client: ApiClient) {
   function useCreateAccount() {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (body: CreateAccountInputType) =>
-        client.createAccount(body as never, genIdempotencyKey()),
+      onMutate: ensureKey<CreateAccountVars>,
+      mutationFn: (vars: CreateAccountVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.createAccount(body, idempotencyKey);
+      },
       onSuccess: () => {
         invalidateList(qc);
       },
@@ -85,8 +107,11 @@ export function makeAccountHooks(client: ApiClient) {
   function useUpdateAccount(id: string) {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (body: UpdateAccountInputType) =>
-        client.updateAccount(id, body as never, genIdempotencyKey()),
+      onMutate: ensureKey<UpdateAccountVars>,
+      mutationFn: (vars: UpdateAccountVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.updateAccount(id, body, idempotencyKey);
+      },
       onSuccess: (_, vars) => {
         void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });
         void qc.invalidateQueries({ queryKey: accountsRoot });
@@ -103,7 +128,9 @@ export function makeAccountHooks(client: ApiClient) {
   function useArchiveAccount(id: string) {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: () => client.archiveAccount(id, genIdempotencyKey()),
+      onMutate: ensureKey<IdempotentAccountActionVars>,
+      mutationFn: (vars: IdempotentAccountActionVars) =>
+        client.archiveAccount(id, vars.idempotencyKey),
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });
         void qc.invalidateQueries({ queryKey: accountsRoot });
@@ -115,7 +142,9 @@ export function makeAccountHooks(client: ApiClient) {
   function useRestoreAccount(id: string) {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: () => client.restoreAccount(id, genIdempotencyKey()),
+      onMutate: ensureKey<IdempotentAccountActionVars>,
+      mutationFn: (vars: IdempotentAccountActionVars) =>
+        client.restoreAccount(id, vars.idempotencyKey),
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: [...accountsRoot, id] });
         void qc.invalidateQueries({ queryKey: accountsRoot });
@@ -127,8 +156,11 @@ export function makeAccountHooks(client: ApiClient) {
   function useReorderAccounts() {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (body: ReorderAccountsInputType) =>
-        client.reorderAccounts(body as never, genIdempotencyKey()),
+      onMutate: ensureKey<ReorderAccountsVars>,
+      mutationFn: (vars: ReorderAccountsVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.reorderAccounts(body, idempotencyKey);
+      },
       onSuccess: (res) => {
         // Replace active pages in the includeArchived=false list with the new order.
         qc.setQueriesData(

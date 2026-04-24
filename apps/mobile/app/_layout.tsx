@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, View, Text, Pressable } from 'react-native';
 import { useAuthStore } from '../src/lib/api';
 import { getBiometricEnabled, promptBiometric } from '../src/lib/biometric';
 import { persistOptions, queryClient } from '../src/lib/query-client';
@@ -40,7 +40,7 @@ export default function RootLayout() {
   // Biometric unlock on foreground.
   useEffect(() => {
     if (!hydrated) return;
-    (async () => {
+    void (async () => {
       const enabled = await getBiometricEnabled();
       if (enabled && refreshToken) {
         setUnlocked(false);
@@ -88,10 +88,6 @@ export default function RootLayout() {
 }
 
 function LockOverlay({ onRetry }: { onRetry: () => void }) {
-  // Lightweight inline component to avoid a third file.
-  const View = require('react-native').View;
-  const Text = require('react-native').Text;
-  const Pressable = require('react-native').Pressable;
   return (
     <View className="absolute inset-0 items-center justify-center bg-bg">
       <Text className="mb-4 text-2xl font-semibold text-text">Locked</Text>

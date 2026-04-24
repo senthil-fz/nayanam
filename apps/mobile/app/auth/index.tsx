@@ -38,7 +38,7 @@ export default function EmailScreen() {
 
         {request.isError && (
           <Text className="mt-2 text-sm text-negative">
-            {(request.error as Error).message}
+            {request.error.message}
           </Text>
         )}
 

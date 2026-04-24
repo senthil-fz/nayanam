@@ -8,7 +8,7 @@ function RestoreButton({ id }: { id: string }) {
   const restore = useRestoreAccount(id);
   return (
     <button
-      onClick={() => restore.mutate()}
+      onClick={() => restore.mutate({})}
       disabled={restore.isPending}
       className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-60"
     >

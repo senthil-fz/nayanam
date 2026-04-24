@@ -47,7 +47,7 @@ export function CurrencyPicker({
           </Pressable>
         </View>
         <FlatList
-          data={SUPPORTED_CURRENCY_CODES as readonly string[]}
+          data={SUPPORTED_CURRENCY_CODES}
           keyExtractor={(c) => c}
           renderItem={({ item }) => {
             const selected = item === value;

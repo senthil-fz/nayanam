@@ -7,11 +7,11 @@ export async function registerForPushIfPossible(): Promise<void> {
   try {
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;
-    if (status !== 'granted') {
+    if (status !== Notifications.PermissionStatus.GRANTED) {
       const req = await Notifications.requestPermissionsAsync();
       status = req.status;
     }
-    if (status !== 'granted') return;
+    if (status !== Notifications.PermissionStatus.GRANTED) return;
 
     const tokenData = await Notifications.getExpoPushTokenAsync();
     const token = tokenData.data;

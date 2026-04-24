@@ -1,11 +1,14 @@
 // Inline SVG icons — ports of the prototype's Icon set (`components/ui.jsx`).
 // Using react-native-svg lets us keep the exact paths from the web version.
 
-import Svg, { Path, Circle, G } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 type Props = { size?: number; color?: string; strokeWidth?: number };
 
-const S = ({ size = 22, color = '#0E0E10', strokeWidth = 1.75, children }: Props & { children: React.ReactNode }) => (
+// `color` and `strokeWidth` are part of the public Props contract for all
+// icon exports; the outer wrapper just passes through `size`. The icon
+// children do consume them — see each export below.
+const S = ({ size = 22, children }: Props & { children: React.ReactNode }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24">{children}</Svg>
 );
 

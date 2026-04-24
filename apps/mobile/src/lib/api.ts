@@ -3,7 +3,9 @@ import * as SecureStore from 'expo-secure-store';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import { router } from 'expo-router';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+// process.env values are typed as `any` in the Expo runtime; narrow to string.
+const BASE_URL: string =
+  (process.env.EXPO_PUBLIC_API_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
 
 // Zustand persist uses sync or async storage; SecureStore is async and works.
 const secureStorage: PersistStorage<AuthState> = {
