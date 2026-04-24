@@ -1,0 +1,133 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-003-phase-3-categories
+      author: nayanam
+      comment: Phase 3 — categories table (system + household), partial uniques, seeded system defaults.
+      changes:
+        - createTable:
+            tableName: categories
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_categories_household
+                    references: households(id)
+                    deleteCascade: true
+              - column: { name: key, type: TEXT, constraints: { nullable: false } }
+              - column: { name: label, type: TEXT, constraints: { nullable: false } }
+              - column: { name: type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: icon_token, type: TEXT, defaultValue: 'tag', constraints: { nullable: false } }
+              - column: { name: color_token, type: TEXT, defaultValue: 'graphite', constraints: { nullable: false } }
+              - column: { name: display_order, type: INTEGER, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: archived_at, type: TIMESTAMPTZ }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_categories_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_categories_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE categories ADD CONSTRAINT ck_categories_type
+              CHECK (type IN ('INCOME','EXPENSE','TRANSFER'));
+        - sql:
+            sql: >
+              ALTER TABLE categories ADD CONSTRAINT ck_categories_key
+              CHECK (char_length(key) BETWEEN 1 AND 48 AND key ~ '^[a-z0-9_]+$');
+        - sql:
+            sql: >
+              ALTER TABLE categories ADD CONSTRAINT ck_categories_label
+              CHECK (char_length(label) BETWEEN 1 AND 40);
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX categories_system_key_uq
+              ON categories (key)
+              WHERE household_id IS NULL AND deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX categories_household_key_uq
+              ON categories (household_id, key)
+              WHERE household_id IS NOT NULL AND deleted_at IS NULL;
+        - createIndex:
+            tableName: categories
+            indexName: idx_categories_household_order
+            columns:
+              - column: { name: household_id }
+              - column: { name: display_order }
+        - createIndex:
+            tableName: categories
+            indexName: idx_categories_household_type_archived
+            columns:
+              - column: { name: household_id }
+              - column: { name: type }
+              - column: { name: archived_at }
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS categories_system_key_uq;
+        - sql:
+            sql: DROP INDEX IF EXISTS categories_household_key_uq;
+        - dropTable:
+            tableName: categories
+
+  - changeSet:
+      id: 20260424-003-phase-3-categories-seed
+      author: nayanam
+      comment: Phase 3 — seed 33 system-default categories (24 EXPENSE + 8 INCOME + 1 TRANSFER). Idempotent via ON CONFLICT DO NOTHING on partial unique.
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: false
+            sql: |
+              INSERT INTO categories (id, household_id, key, label, type, icon_token, color_token, display_order, created_at, updated_at) VALUES
+                ('01KPYCJH00R1G51BY05RV8KFQB', NULL, 'groceries',        'Groceries',         'EXPENSE',  'shopping-cart',           'emerald',  0,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQC', NULL, 'dining',           'Dining',            'EXPENSE',  'utensils',                'amber',    1,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQD', NULL, 'transport',        'Transport',         'EXPENSE',  'bus',                     'sky',      2,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQE', NULL, 'fuel',             'Fuel',              'EXPENSE',  'fuel',                    'slate',    3,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQF', NULL, 'housing',          'Housing',           'EXPENSE',  'home',                    'indigo',   4,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQG', NULL, 'utilities',        'Utilities',         'EXPENSE',  'lightbulb',               'amber',    5,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQH', NULL, 'internet',         'Internet',          'EXPENSE',  'wifi',                    'sky',      6,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQJ', NULL, 'mobile',           'Mobile',            'EXPENSE',  'smartphone',              'violet',   7,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQK', NULL, 'health',           'Health',            'EXPENSE',  'heart-pulse',             'rose',     8,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQM', NULL, 'fitness',          'Fitness',           'EXPENSE',  'dumbbell',                'emerald',  9,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQN', NULL, 'education',        'Education',         'EXPENSE',  'book-open',               'indigo',   10, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQP', NULL, 'entertainment',    'Entertainment',     'EXPENSE',  'film',                    'violet',   11, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQQ', NULL, 'subscriptions',    'Subscriptions',     'EXPENSE',  'refresh-ccw',             'teal',     12, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQR', NULL, 'shopping',         'Shopping',          'EXPENSE',  'shopping-bag',            'rose',     13, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQS', NULL, 'travel',           'Travel',            'EXPENSE',  'plane',                   'sky',      14, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQT', NULL, 'insurance',        'Insurance',         'EXPENSE',  'shield',                  'graphite', 15, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQV', NULL, 'tax',              'Tax',               'EXPENSE',  'receipt',                 'graphite', 16, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQW', NULL, 'gifts',            'Gifts',             'EXPENSE',  'gift',                    'rose',     17, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQX', NULL, 'donations',        'Donations',         'EXPENSE',  'heart',                   'rose',     18, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQY', NULL, 'kids',             'Kids',              'EXPENSE',  'baby',                    'amber',    19, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFQZ', NULL, 'pets',             'Pets',              'EXPENSE',  'paw-print',               'amber',    20, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR0', NULL, 'personal_care',    'Personal Care',     'EXPENSE',  'scissors',                'violet',   21, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR1', NULL, 'home_improvement', 'Home Improvement',  'EXPENSE',  'hammer',                  'indigo',   22, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR2', NULL, 'fees_charges',     'Fees & Charges',    'EXPENSE',  'banknote',                'graphite', 23, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR3', NULL, 'other_expense',    'Other',             'EXPENSE',  'ellipsis',                'graphite', 24, now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR4', NULL, 'salary',           'Salary',            'INCOME',   'wallet',                  'emerald',  0,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR5', NULL, 'bonus',            'Bonus',             'INCOME',   'trophy',                  'amber',    1,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR6', NULL, 'freelance',        'Freelance',         'INCOME',   'briefcase',               'indigo',   2,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR7', NULL, 'dividends',        'Dividends',         'INCOME',   'trending-up',             'teal',     3,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR8', NULL, 'interest',         'Interest',          'INCOME',   'percent',                 'teal',     4,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFR9', NULL, 'refund',           'Refund',            'INCOME',   'undo-2',                  'sky',      5,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFRA', NULL, 'gift_income',      'Gift',              'INCOME',   'gift',                    'rose',     6,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFRB', NULL, 'other_income',     'Other',             'INCOME',   'ellipsis',                'graphite', 7,  now(), now()),
+                ('01KPYCJH00R1G51BY05RV8KFRC', NULL, 'transfer_system',  'Transfer',          'TRANSFER', 'arrow-right-arrow-left',  'graphite', 0,  now(), now())
+              ON CONFLICT (key) WHERE household_id IS NULL AND deleted_at IS NULL DO NOTHING;
+      rollback:
+        - sql:
+            sql: DELETE FROM categories WHERE household_id IS NULL;

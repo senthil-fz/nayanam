@@ -81,16 +81,16 @@ Maps to Home activity list + underlying data model for everything.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-301 | `Category` table with system defaults + per-household custom; icon + color + type (income/expense/transfer) | api | todo | |
-| F-302 | Category endpoints (list, create, update, archive) + seed system defaults via Liquibase | api | todo | |
-| F-303 | `Transaction` table: amountMinor, currencyCode, accountId, categoryId, occurredAt, note, soft delete, audit | api | todo | |
-| F-304 | Transaction endpoints: list (cursor paginated, filters: account/category/type/range/search), create, update, delete, bulk-create (for seeding) | api | todo | |
-| F-305 | **Transfer** — a paired pair-write: one debit + one credit across two of the user's accounts, atomic, single `transferId` link | api | todo | |
-| F-306 | Idempotency interceptor + `idempotency_keys` table wired into transaction/transfer creates | api | todo | |
-| F-307 | Events: emit `transaction.created/updated/deleted`, `transfer.created` into `events` table | api | todo | |
-| F-308 | Web: transaction list, segmented filter (All/Income/Expenses), add/edit/delete, transfer flow | web | todo | |
-| F-309 | Mobile: same as web + swipe-to-delete + pull-to-refresh + offline queue for creates | mobile | todo | |
-| F-310 | Shared Zod schemas + TanStack Query hooks in `packages/core` | core | todo | |
+| F-301 | `Category` table with system defaults + per-household custom; icon + color + type (income/expense/transfer) | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-302 | Category endpoints (list, create, update, archive) + seed system defaults via Liquibase | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-303 | `Transaction` table: amountMinor, currencyCode, accountId, categoryId, occurredAt, note, soft delete, audit | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-304 | Transaction endpoints: list (cursor paginated, filters: account/category/type/range/search), create, update, delete, bulk-create (for seeding) | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-305 | **Transfer** — a paired pair-write: one debit + one credit across two of the user's accounts, atomic, single `transferId` link | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-306 | Idempotency interceptor + `idempotency_keys` table wired into transaction/transfer creates | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-307 | Events: emit `transaction.created/updated/deleted`, `transfer.created` into `events` table | api | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-308 | Web: transaction list, segmented filter (All/Income/Expenses), add/edit/delete, transfer flow | web | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
+| F-309 | Mobile: same as web + swipe-to-delete + pull-to-refresh + offline queue for creates | mobile | shipped* | [spec](specs/2026-04-24-phase-3-categories-transactions.md) — code written; typecheck gated on workspace re-admission (see Phase 0 deferred pins) |
+| F-310 | Shared Zod schemas + TanStack Query hooks in `packages/core` | core | shipped | [spec](specs/2026-04-24-phase-3-categories-transactions.md) |
 
 ## Phase 4 — Home Screen
 

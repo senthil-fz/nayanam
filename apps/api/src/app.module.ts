@@ -10,6 +10,9 @@ import { AuthModule } from './auth/auth.module';
 import { MeModule } from './me/me.module';
 import { HouseholdsModule } from './households/households.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { CategoriesModule } from './categories/categories.module';
+import { TransactionsModule } from './transactions/transactions.module';
+import { TransfersModule } from './transfers/transfers.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 
 @Module({
@@ -32,6 +35,9 @@ import { RequestContextMiddleware } from './common/context.middleware';
     MeModule,
     HouseholdsModule,
     AccountsModule,
+    CategoriesModule,
+    TransactionsModule,
+    TransfersModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

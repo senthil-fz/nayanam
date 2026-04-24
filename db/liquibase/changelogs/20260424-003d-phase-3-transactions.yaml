@@ -1,0 +1,121 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-003-phase-3-transactions
+      author: nayanam
+      comment: Phase 3 — transactions table with FKs to accounts, categories, transfers; trigram GIN on note.
+      changes:
+        - createTable:
+            tableName: transactions
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_transactions_household
+                    references: households(id)
+                    deleteCascade: false
+              - column:
+                  name: account_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_transactions_account
+                    references: accounts(id)
+                    deleteCascade: false
+              - column:
+                  name: category_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_transactions_category
+                    references: categories(id)
+                    deleteCascade: false
+              - column: { name: type, type: TEXT, constraints: { nullable: false } }
+              - column: { name: amount_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: currency_code, type: CHAR(3), constraints: { nullable: false } }
+              - column: { name: occurred_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: note, type: TEXT }
+              - column:
+                  name: transfer_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_transactions_transfer
+                    references: transfers(id)
+                    deleteCascade: false
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_transactions_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_transactions_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE transactions ADD CONSTRAINT ck_transactions_type
+              CHECK (type IN ('INCOME','EXPENSE','TRANSFER'));
+        - sql:
+            sql: >
+              ALTER TABLE transactions ADD CONSTRAINT ck_transactions_amount_positive
+              CHECK (amount_minor > 0);
+        - sql:
+            sql: >
+              ALTER TABLE transactions ADD CONSTRAINT ck_transactions_note_len
+              CHECK (note IS NULL OR char_length(note) <= 500);
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_household_occurred
+              ON transactions (household_id, occurred_at DESC, id DESC)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_household_account_occurred
+              ON transactions (household_id, account_id, occurred_at DESC, id DESC)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_household_category_occurred
+              ON transactions (household_id, category_id, occurred_at DESC)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_household_type_occurred
+              ON transactions (household_id, type, occurred_at DESC)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_transfer
+              ON transactions (household_id, transfer_id)
+              WHERE transfer_id IS NOT NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_transactions_note_trgm
+              ON transactions USING gin (lower(note) gin_trgm_ops)
+              WHERE deleted_at IS NULL AND note IS NOT NULL;
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_note_trgm;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_household_occurred;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_household_account_occurred;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_household_category_occurred;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_household_type_occurred;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_transactions_transfer;
+        - dropTable:
+            tableName: transactions

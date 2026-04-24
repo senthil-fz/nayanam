@@ -463,34 +463,22 @@ async function recordEvent(
 }
 
 async function hasNonDeletedTransactions(tx: AnyTx, accountId: string): Promise<boolean> {
-  try {
-    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
-      SELECT EXISTS(
-        SELECT 1 FROM transactions
-         WHERE account_id = ${accountId} AND deleted_at IS NULL
-      ) AS exists
-    `;
-    return rows[0]?.exists === true;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/transactions/i.test(msg) && /does not exist|relation/i.test(msg)) return false;
-    throw err;
-  }
+  const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1 FROM transactions
+       WHERE account_id = ${accountId} AND deleted_at IS NULL
+    ) AS exists
+  `;
+  return rows[0]?.exists === true;
 }
 
 async function hasAnyTransactions(tx: AnyTx, accountId: string): Promise<boolean> {
-  try {
-    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
-      SELECT EXISTS(
-        SELECT 1 FROM transactions WHERE account_id = ${accountId}
-      ) AS exists
-    `;
-    return rows[0]?.exists === true;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/transactions/i.test(msg) && /does not exist|relation/i.test(msg)) return false;
-    throw err;
-  }
+  const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1 FROM transactions WHERE account_id = ${accountId}
+    ) AS exists
+  `;
+  return rows[0]?.exists === true;
 }
 
 function mapUniqueViolation(err: unknown, nickname: string): Error {

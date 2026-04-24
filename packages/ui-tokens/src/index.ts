@@ -152,6 +152,94 @@ export const account = {
   defaultIcon: DEFAULT_ACCOUNT_ICON,
 } as const;
 
+// ─────────────────────────────────────────────────────────────
+// Category design tokens — consumed by web Transactions +
+// Categories screens and mobile counterparts. Each token pair
+// is (solid ink, soft tint) for the circular icon chip; the
+// palette is deliberately broader than `account.colors` to
+// distinguish the 33 seeded system categories at a glance.
+// ─────────────────────────────────────────────────────────────
+
+export const CATEGORY_COLORS = {
+  slate:    { name: 'Slate',    ink: '#475569', soft: '#E2E8F0' },
+  graphite: { name: 'Graphite', ink: '#3F3F46', soft: '#E4E4E7' },
+  rose:     { name: 'Rose',     ink: '#E11D48', soft: '#FFE4E6' },
+  red:      { name: 'Red',      ink: '#DC2626', soft: '#FEE2E2' },
+  orange:   { name: 'Orange',   ink: '#EA580C', soft: '#FFEDD5' },
+  amber:    { name: 'Amber',    ink: '#D97706', soft: '#FEF3C7' },
+  yellow:   { name: 'Yellow',   ink: '#CA8A04', soft: '#FEF9C3' },
+  lime:     { name: 'Lime',     ink: '#65A30D', soft: '#ECFCCB' },
+  emerald:  { name: 'Emerald',  ink: '#059669', soft: '#D1FAE5' },
+  teal:     { name: 'Teal',     ink: '#0D9488', soft: '#CCFBF1' },
+  cyan:     { name: 'Cyan',     ink: '#0891B2', soft: '#CFFAFE' },
+  sky:      { name: 'Sky',      ink: '#0284C7', soft: '#E0F2FE' },
+  blue:     { name: 'Blue',     ink: '#2563EB', soft: '#DBEAFE' },
+  indigo:   { name: 'Indigo',   ink: '#4F46E5', soft: '#E0E7FF' },
+  violet:   { name: 'Violet',   ink: '#7C3AED', soft: '#EDE9FE' },
+  fuchsia:  { name: 'Fuchsia',  ink: '#C026D3', soft: '#FAE8FF' },
+} as const;
+
+export type CategoryColorToken = keyof typeof CATEGORY_COLORS;
+
+export const CATEGORY_COLOR_TOKENS = Object.keys(
+  CATEGORY_COLORS,
+) as CategoryColorToken[];
+
+// Category icon tokens. Names match lucide-react component names lowercased
+// and kebab-cased (web uses `lucide-react`, mobile uses `lucide-react-native`).
+// The set is frozen for Phase 3; extensions ship in later phases.
+export const CATEGORY_ICONS = {
+  'tag':                     { name: 'Tag' },
+  'shopping-cart':           { name: 'Shopping cart' },
+  'shopping-bag':            { name: 'Shopping bag' },
+  'utensils':                { name: 'Utensils' },
+  'bus':                     { name: 'Bus' },
+  'fuel':                    { name: 'Fuel' },
+  'home':                    { name: 'Home' },
+  'lightbulb':               { name: 'Lightbulb' },
+  'wifi':                    { name: 'Wi-Fi' },
+  'smartphone':              { name: 'Smartphone' },
+  'heart-pulse':             { name: 'Health' },
+  'dumbbell':                { name: 'Dumbbell' },
+  'book-open':               { name: 'Book' },
+  'film':                    { name: 'Film' },
+  'refresh-ccw':             { name: 'Subscriptions' },
+  'plane':                   { name: 'Plane' },
+  'shield':                  { name: 'Shield' },
+  'receipt':                 { name: 'Receipt' },
+  'gift':                    { name: 'Gift' },
+  'heart':                   { name: 'Heart' },
+  'baby':                    { name: 'Baby' },
+  'paw-print':               { name: 'Paw print' },
+  'scissors':                { name: 'Scissors' },
+  'hammer':                  { name: 'Hammer' },
+  'banknote':                { name: 'Banknote' },
+  'ellipsis':                { name: 'Ellipsis' },
+  'wallet':                  { name: 'Wallet' },
+  'trophy':                  { name: 'Trophy' },
+  'briefcase':               { name: 'Briefcase' },
+  'trending-up':             { name: 'Trending up' },
+  'percent':                 { name: 'Percent' },
+  'undo-2':                  { name: 'Refund' },
+  'arrow-right-arrow-left':  { name: 'Transfer' },
+} as const;
+
+export type CategoryIconToken = keyof typeof CATEGORY_ICONS;
+
+export const CATEGORY_ICON_TOKENS = Object.keys(
+  CATEGORY_ICONS,
+) as CategoryIconToken[];
+
+export const DEFAULT_CATEGORY_COLOR: CategoryColorToken = 'graphite';
+export const DEFAULT_CATEGORY_ICON: CategoryIconToken = 'tag';
+
+export const category = {
+  colors: CATEGORY_COLORS,
+  icons: CATEGORY_ICONS,
+  defaultColor: DEFAULT_CATEGORY_COLOR,
+  defaultIcon: DEFAULT_CATEGORY_ICON,
+} as const;
+
 export const tokens = {
   accents: ACCENTS,
   light: LIGHT,
@@ -161,4 +249,5 @@ export const tokens = {
   typography: TYPOGRAPHY,
   categories: CATEGORIES,
   account,
+  category,
 } as const;

@@ -4,3 +4,5 @@ export * from './hooks';
 export * from './utils';
 export * from './api/client';
 export * from './accounts';
+export * from './categories';
+export * from './transactions';

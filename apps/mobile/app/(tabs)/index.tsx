@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatMoney } from '@nayanam/core';
+import { useRouter } from 'expo-router';
+import { formatMoney, type Account, type Category } from '@nayanam/core';
 import { LIGHT } from '@nayanam/ui-tokens';
 import { useAuthStore } from '../../src/lib/api';
 import {
+  useAccounts,
   useAccountsSummary,
+  useCategories,
   useCreateHousehold,
   useHouseholds,
   useLogout,
   useMe,
+  useTransactions,
 } from '../../src/lib/hooks';
+import { TransactionRow } from '../../src/features/transactions/TransactionRow';
 
 export default function Home() {
   const me = useMe();
@@ -26,6 +31,27 @@ export default function Home() {
   const active = list.find((h) => h.id === activeId) ?? list[0];
   const summaryQuery = useAccountsSummary();
   const summary = summaryQuery.data;
+  const router = useRouter();
+
+  // Recent activity (top 5). Hydrate via the accounts + categories lookups
+  // the Transactions tab also uses.
+  const txnsQuery = useTransactions({ limit: 5 });
+  const recent = useMemo(
+    () => txnsQuery.data?.pages.flatMap((p) => p.items).slice(0, 5) ?? [],
+    [txnsQuery.data],
+  );
+  const accountsQuery = useAccounts({ includeArchived: true });
+  const accountsById = useMemo(() => {
+    const m = new Map<string, Account>();
+    for (const p of accountsQuery.data?.pages ?? []) for (const a of p.items) m.set(a.id, a);
+    return m;
+  }, [accountsQuery.data]);
+  const categoriesQuery = useCategories({ includeArchived: true });
+  const categoriesById = useMemo(() => {
+    const m = new Map<string, Category>();
+    for (const p of categoriesQuery.data?.pages ?? []) for (const c of p.items) m.set(c.id, c);
+    return m;
+  }, [categoriesQuery.data]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg">
@@ -165,6 +191,83 @@ export default function Home() {
               >
                 <Text className="text-white">Create</Text>
               </Pressable>
+            </View>
+          )}
+        </View>
+
+        {/* Recent activity — top 5, matches prototype Home activity list */}
+        <View style={{ marginTop: 24 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                color: LIGHT.textFaint,
+                fontFamily: 'Geist Mono',
+                letterSpacing: 0.6,
+              }}
+            >
+              RECENT ACTIVITY
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="See all transactions"
+              onPress={() => router.push('/(tabs)/transactions')}
+            >
+              <Text style={{ color: LIGHT.textDim, fontSize: 13 }}>See all</Text>
+            </Pressable>
+          </View>
+
+          {txnsQuery.isLoading ? (
+            <Text style={{ color: LIGHT.textDim, paddingVertical: 12 }}>Loading…</Text>
+          ) : recent.length === 0 ? (
+            <View
+              style={{
+                padding: 18,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: LIGHT.border,
+                backgroundColor: LIGHT.surface,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: LIGHT.textDim, fontSize: 13 }}>
+                No transactions yet.
+              </Text>
+            </View>
+          ) : (
+            <View
+              style={{
+                borderRadius: 16,
+                backgroundColor: LIGHT.surface,
+                borderWidth: 1,
+                borderColor: LIGHT.border,
+                paddingHorizontal: 14,
+              }}
+            >
+              {recent.map((t, idx) => (
+                <View
+                  key={t.id}
+                  style={{
+                    borderBottomWidth: idx < recent.length - 1 ? 0.5 : 0,
+                    borderBottomColor: LIGHT.border,
+                  }}
+                >
+                  <TransactionRow
+                    transaction={t}
+                    account={accountsById.get(t.accountId)}
+                    category={categoriesById.get(t.categoryId)}
+                    compact
+                    onPress={() => router.push('/(tabs)/transactions')}
+                  />
+                </View>
+              ))}
             </View>
           )}
         </View>

@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-003-phase-3-pg-trgm
+      author: nayanam
+      comment: Phase 3 — enable pg_trgm extension for trigram GIN search on transaction notes.
+      changes:
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      rollback:
+        - sql:
+            sql: DROP EXTENSION IF EXISTS pg_trgm;

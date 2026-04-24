@@ -74,10 +74,13 @@ model Household {
   createdBy           String?   @map("created_by") @db.VarChar(26)
   updatedBy           String?   @map("updated_by") @db.VarChar(26)
 
-  members  HouseholdMember[]
-  invites  HouseholdInvite[]
-  events   Event[]
-  accounts Account[]
+  members      HouseholdMember[]
+  invites      HouseholdInvite[]
+  events       Event[]
+  accounts     Account[]
+  categories   Category[]
+  transactions Transaction[]
+  transfers    Transfer[]
 
   @@map("households")
 }
@@ -104,12 +107,90 @@ model Account {
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  household Household @relation(fields: [householdId], references: [id])
+  household           Household    @relation(fields: [householdId], references: [id])
+  transactions        Transaction[]
+  sourceTransfers     Transfer[]   @relation("TransferSourceAccount")
+  destinationTransfers Transfer[]  @relation("TransferDestinationAccount")
 
   @@index([householdId, displayOrder], map: "idx_accounts_household_display")
   @@index([householdId, archivedAt], map: "idx_accounts_household_archived")
   @@index([householdId], map: "idx_accounts_household")
   @@map("accounts")
+}
+
+model Category {
+  id           String    @id @db.VarChar(26)
+  householdId  String?   @map("household_id") @db.VarChar(26)
+  key          String
+  label        String
+  type         String
+  iconToken    String    @default("tag") @map("icon_token")
+  colorToken   String    @default("graphite") @map("color_token")
+  displayOrder Int       @default(0) @map("display_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.VarChar(26)
+  updatedBy    String?   @map("updated_by") @db.VarChar(26)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household    Household?    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([householdId, displayOrder], map: "idx_categories_household_order")
+  @@index([householdId, type, archivedAt], map: "idx_categories_household_type_archived")
+  @@map("categories")
+}
+
+model Transaction {
+  id           String    @id @db.VarChar(26)
+  householdId  String    @map("household_id") @db.VarChar(26)
+  accountId    String    @map("account_id") @db.VarChar(26)
+  categoryId   String    @map("category_id") @db.VarChar(26)
+  type         String
+  amountMinor  BigInt    @map("amount_minor")
+  currencyCode String    @map("currency_code") @db.Char(3)
+  occurredAt   DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  note         String?
+  transferId   String?   @map("transfer_id") @db.VarChar(26)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy    String    @map("created_by") @db.VarChar(26)
+  updatedBy    String    @map("updated_by") @db.VarChar(26)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id])
+  account   Account   @relation(fields: [accountId], references: [id])
+  category  Category  @relation(fields: [categoryId], references: [id])
+  transfer  Transfer? @relation(fields: [transferId], references: [id])
+
+  @@map("transactions")
+}
+
+model Transfer {
+  id                    String    @id @db.VarChar(26)
+  householdId           String    @map("household_id") @db.VarChar(26)
+  sourceAccountId       String    @map("source_account_id") @db.VarChar(26)
+  destinationAccountId  String    @map("destination_account_id") @db.VarChar(26)
+  amountMinor           BigInt    @map("amount_minor")
+  currencyCode          String    @map("currency_code") @db.Char(3)
+  occurredAt            DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  note                  String?
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy             String    @map("created_by") @db.VarChar(26)
+  updatedBy             String    @map("updated_by") @db.VarChar(26)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household          Household   @relation(fields: [householdId], references: [id])
+  sourceAccount      Account     @relation("TransferSourceAccount", fields: [sourceAccountId], references: [id])
+  destinationAccount Account     @relation("TransferDestinationAccount", fields: [destinationAccountId], references: [id])
+  transactions       Transaction[]
+
+  @@index([householdId, occurredAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_household_occurred")
+  @@index([householdId, sourceAccountId], map: "idx_transfers_household_source")
+  @@index([householdId, destinationAccountId], map: "idx_transfers_household_destination")
+  @@map("transfers")
 }
 
 model HouseholdMember {

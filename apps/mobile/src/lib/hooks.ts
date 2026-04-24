@@ -1,4 +1,9 @@
-import { makeAccountHooks, makeAuthHooks } from '@nayanam/core';
+import {
+  makeAccountHooks,
+  makeAuthHooks,
+  makeCategoryHooks,
+  makeTransactionHooks,
+} from '@nayanam/core';
 import { apiClient, useAuthStore } from './api';
 
 export const {
@@ -26,3 +31,27 @@ export const {
   useRestoreAccount,
   useReorderAccounts,
 } = makeAccountHooks(apiClient);
+
+export const {
+  useCategories,
+  useCategory,
+  useCreateCategory,
+  useUpdateCategory,
+  useArchiveCategory,
+  useRestoreCategory,
+  useReorderCategories,
+} = makeCategoryHooks(apiClient);
+
+export const {
+  useTransactions,
+  useTransaction,
+  useCreateTransaction,
+  useUpdateTransaction,
+  useDeleteTransaction,
+  useRestoreTransaction,
+  useBulkCreateTransactions,
+  useTransfer,
+  useCreateTransfer,
+  useDeleteTransfer,
+  useRestoreTransfer,
+} = makeTransactionHooks(apiClient);

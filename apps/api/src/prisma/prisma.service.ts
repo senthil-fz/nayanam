@@ -21,14 +21,30 @@ export const HOUSEHOLD_SCOPED_MODELS = new Set<string>([
   'HouseholdInvite',
   'Event',
   'Account',
-  // Phase 3+ add: Category, Transaction, Bill, Budget, Attachment, ...
+  'Category',
+  'Transaction',
+  'Transfer',
+]);
+
+/**
+ * Models whose `householdId` column is NULLABLE: a NULL row is a system-level
+ * row visible to every tenant. The middleware must allow these through reads
+ * where `householdId = ctx.householdId OR householdId IS NULL`. Writes must
+ * still bind to the current household (we never mutate system rows through
+ * the scoped path — services explicitly reject system mutations at a higher
+ * layer).
+ */
+export const HOUSEHOLD_NULLABLE_TENANT_MODELS = new Set<string>([
+  'Category',
 ]);
 
 /** Models that use soft-delete via `deletedAt`. */
 export const SOFT_DELETE_MODELS = new Set<string>([
   'Household',
   'Account',
-  // Phase 3+: Category, Transaction, Bill, Budget, Attachment, ...
+  'Category',
+  'Transaction',
+  'Transfer',
 ]);
 
 @Injectable()
@@ -81,7 +97,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         const orig = delegate[op]?.bind(delegate);
         if (!orig) continue;
         delegate[op] = async (args: Prisma.Args<unknown, 'findMany'>): Promise<unknown> => {
-          enforceScopedWhere(model, (args as { where?: { householdId?: string } } | undefined)?.where);
+          enforceScopedWhere(
+            model,
+            (args as { where?: { householdId?: string } } | undefined)?.where,
+            HOUSEHOLD_NULLABLE_TENANT_MODELS.has(model),
+          );
           return orig(args);
         };
       }
@@ -124,10 +144,30 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 }
 
-function enforceScopedWhere(model: string, where: Record<string, unknown> | undefined) {
+function enforceScopedWhere(
+  model: string,
+  where: Record<string, unknown> | undefined,
+  nullableTenant = false,
+) {
   const ctx = getContext();
   const ctxHh = ctx?.householdId;
   const whereHh = extractHouseholdId(where);
+  // Nullable-tenant models (e.g. Category) may carry household_id = NULL for
+  // system-default rows visible to every tenant. If the caller didn't pass an
+  // explicit scope, we allow the call through as long as the request has a
+  // resolved householdId (the service is responsible for OR-ing NULL).
+  if (nullableTenant) {
+    if (!ctxHh && !whereHh) {
+      throw Errors.householdScopeViolation();
+    }
+    if (ctxHh && whereHh && whereHh !== ctxHh) {
+      throw Errors.householdScopeViolation();
+    }
+    // Do NOT auto-inject household_id on nullable-tenant models — the service
+    // must compose `{ OR: [{ householdId: ctx }, { householdId: null }] }` so
+    // that system rows remain visible.
+    return;
+  }
   // Global/system-level reads (e.g. invite accept lookups by tokenHash) can
   // opt out by setting ctx.householdId === undefined AND relying on explicit
   // where.householdId — but we still require at least one.

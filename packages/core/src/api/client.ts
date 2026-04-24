@@ -24,6 +24,23 @@ type BalanceHistoryResponse = ApiSchemas['BalanceHistoryResponse'];
 type ReorderAccountsInput = ApiSchemas['ReorderAccountsInput'];
 type ReorderAccountsResponse = ApiSchemas['ReorderAccountsResponse'];
 
+type Category = ApiSchemas['Category'];
+type CategoriesPage = ApiSchemas['CategoriesPage'];
+type CreateCategoryInput = ApiSchemas['CreateCategoryInput'];
+type UpdateCategoryInput = ApiSchemas['UpdateCategoryInput'];
+type ReorderCategoriesInput = ApiSchemas['ReorderCategoriesInput'];
+type ReorderCategoriesResponse = ApiSchemas['ReorderCategoriesResponse'];
+
+type Transaction = ApiSchemas['Transaction'];
+type TransactionsPage = ApiSchemas['TransactionsPage'];
+type CreateTransactionInput = ApiSchemas['CreateTransactionInput'];
+type UpdateTransactionInput = ApiSchemas['UpdateTransactionInput'];
+type BulkCreateTransactionsInput = ApiSchemas['BulkCreateTransactionsInput'];
+type BulkCreateTransactionsResponse = ApiSchemas['BulkCreateTransactionsResponse'];
+type CreateTransferInput = ApiSchemas['CreateTransferInput'];
+type TransferWithPairedTransactions = ApiSchemas['TransferWithPairedTransactions'];
+type TransactionType = ApiSchemas['TransactionType'];
+
 export type ApiError = {
   status: number;
   code: string;
@@ -74,7 +91,10 @@ type RequestOpts = {
   idempotencyKey?: string;
   /** Skip the auto-injected X-Household-Id header. */
   crossHousehold?: boolean;
-  query?: Record<string, string | number | boolean | undefined | null>;
+  query?: Record<
+    string,
+    string | number | boolean | undefined | null | ReadonlyArray<string | number>
+  >;
 };
 
 function buildQuery(q?: RequestOpts['query']): string {
@@ -82,6 +102,13 @@ function buildQuery(q?: RequestOpts['query']): string {
   const usp = new URLSearchParams();
   for (const [k, v] of Object.entries(q)) {
     if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item === undefined || item === null) continue;
+        usp.append(k, String(item));
+      }
+      continue;
+    }
     usp.append(k, String(v));
   }
   const s = usp.toString();
@@ -250,6 +277,78 @@ export function createApiClient(opts: ApiClientOptions) {
     getAccountsSummary: () => request<AccountsSummaryResponse>('/accounts/summary'),
     getAccountBalanceHistory: (id: string, months = 6) =>
       request<BalanceHistoryResponse>(`/accounts/${id}/balance-history`, { query: { months } }),
+
+    // Categories (household-scoped; system rows share the same list)
+    listCategories: (params?: {
+      cursor?: string;
+      limit?: number;
+      type?: 'INCOME' | 'EXPENSE';
+      includeArchived?: boolean;
+    }) => request<CategoriesPage>('/categories', { query: params }),
+    getCategory: (id: string) => request<Category>(`/categories/${id}`),
+    createCategory: (body: CreateCategoryInput, idempotencyKey?: string) =>
+      request<Category>('/categories', { method: 'POST', body, idempotencyKey }),
+    updateCategory: (id: string, body: UpdateCategoryInput, idempotencyKey?: string) =>
+      request<Category>(`/categories/${id}`, { method: 'PATCH', body, idempotencyKey }),
+    archiveCategory: (id: string, idempotencyKey?: string) =>
+      request<Category>(`/categories/${id}`, { method: 'DELETE', idempotencyKey }),
+    restoreCategory: (id: string, idempotencyKey?: string) =>
+      request<Category>(`/categories/${id}/restore`, { method: 'POST', idempotencyKey }),
+    reorderCategories: (body: ReorderCategoriesInput, idempotencyKey?: string) =>
+      request<ReorderCategoriesResponse>('/categories/reorder', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+
+    // Transactions
+    listTransactions: (params?: {
+      cursor?: string;
+      limit?: number;
+      accountId?: readonly string[];
+      categoryId?: readonly string[];
+      type?: TransactionType;
+      from?: string;
+      to?: string;
+      q?: string;
+      includeDeleted?: boolean;
+      transferId?: string;
+    }) => request<TransactionsPage>('/transactions', { query: params }),
+    getTransaction: (id: string) => request<Transaction>(`/transactions/${id}`),
+    createTransaction: (body: CreateTransactionInput, idempotencyKey?: string) =>
+      request<Transaction>('/transactions', { method: 'POST', body, idempotencyKey }),
+    updateTransaction: (id: string, body: UpdateTransactionInput, idempotencyKey?: string) =>
+      request<Transaction>(`/transactions/${id}`, { method: 'PATCH', body, idempotencyKey }),
+    deleteTransaction: (id: string, idempotencyKey?: string) =>
+      request<Transaction>(`/transactions/${id}`, { method: 'DELETE', idempotencyKey }),
+    restoreTransaction: (id: string, idempotencyKey?: string) =>
+      request<Transaction>(`/transactions/${id}/restore`, { method: 'POST', idempotencyKey }),
+    bulkCreateTransactions: (body: BulkCreateTransactionsInput, idempotencyKey?: string) =>
+      request<BulkCreateTransactionsResponse>('/transactions/bulk-create', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+
+    // Transfers
+    getTransfer: (id: string) =>
+      request<TransferWithPairedTransactions>(`/transfers/${id}`),
+    createTransfer: (body: CreateTransferInput, idempotencyKey?: string) =>
+      request<TransferWithPairedTransactions>('/transfers', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    deleteTransfer: (id: string, idempotencyKey?: string) =>
+      request<TransferWithPairedTransactions>(`/transfers/${id}`, {
+        method: 'DELETE',
+        idempotencyKey,
+      }),
+    restoreTransfer: (id: string, idempotencyKey?: string) =>
+      request<TransferWithPairedTransactions>(`/transfers/${id}/restore`, {
+        method: 'POST',
+        idempotencyKey,
+      }),
 
     // Generic escape hatch
     raw: request,

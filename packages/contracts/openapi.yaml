@@ -529,6 +529,539 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List categories visible to the current household
+      description: |
+        Returns both system-default categories (householdId = null) and
+        household-custom categories. Ordering: system rows first (alphabetical
+        by label), then household rows by displayOrder ASC, createdAt ASC.
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+        - name: type
+          in: query
+          required: false
+          description: Filter by type. Omit to include all (including reserved TRANSFER row).
+          schema: { type: string, enum: [INCOME, EXPENSE] }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Categories page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoriesPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createCategory
+      summary: Create a household-custom category
+      description: |
+        Creates a category scoped to the active household. type=TRANSFER is
+        rejected with CATEGORY_TYPE_INVALID — the reserved system TRANSFER
+        category is the only row with that type.
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /categories/reorder:
+    post:
+      operationId: reorderCategories
+      summary: Reorder household categories (full-set)
+      description: |
+        Body carries the desired ordering of household-custom categories.
+        System rows are never mutated; any system id in the body returns
+        CATEGORY_SYSTEM_READONLY. Server normalizes displayOrder to dense
+        0..N-1 within the household scope in one transaction.
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderCategoriesInput' }
+      responses:
+        '200':
+          description: New ordering
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReorderCategoriesResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /categories/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Category ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getCategory
+      summary: Get one category
+      tags: [categories]
+      responses:
+        '200':
+          description: Category
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateCategory
+      summary: Update a household-custom category
+      description: |
+        Updates the mutable fields of a household-custom category. System rows
+        (householdId = null) return CATEGORY_SYSTEM_READONLY (403). Attempts
+        to change `type` return CATEGORY_TYPE_IMMUTABLE (422).
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCategoryInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: archiveCategory
+      summary: Archive (or hard-delete) a household-custom category
+      description: |
+        Archives the category (sets archivedAt). If the category has zero
+        lifetime transactions (including soft-deleted), behaves as a true
+        delete and sets deletedAt instead. System rows return
+        CATEGORY_SYSTEM_READONLY (403). Idempotent: re-archiving returns 200.
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Archived (or hard-deleted) category
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /categories/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreCategory
+      summary: Restore an archived household-custom category
+      description: |
+        Clears archivedAt. System rows return CATEGORY_SYSTEM_READONLY.
+        Hard-deleted rows return RESOURCE_NOT_FOUND. Idempotent.
+      tags: [categories]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored category
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      summary: List transactions with filters
+      description: |
+        Keyset cursor paginated. Order: occurredAt DESC, id DESC. Filters
+        compose with AND. `accountId` and `categoryId` accept either a single
+        value or a repeated query parameter. `includeDeleted=true` is honored
+        for OWNER/ADMIN only and silently forced to false otherwise. When
+        `transferId` is set, returns both pair-rows and ignores other filters
+        except `includeDeleted`.
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: accountId
+          in: query
+          required: false
+          description: Single account id or repeated parameter.
+          schema:
+            type: array
+            items: { type: string }
+          explode: true
+          style: form
+        - name: categoryId
+          in: query
+          required: false
+          description: Single category id or repeated parameter.
+          schema:
+            type: array
+            items: { type: string }
+          explode: true
+          style: form
+        - name: type
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/TransactionType' }
+        - name: from
+          in: query
+          required: false
+          description: ISO date-time (UTC), inclusive lower bound on occurredAt.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          description: ISO date-time (UTC), inclusive upper bound on occurredAt.
+          schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          required: false
+          description: Free-text note search. Trimmed; 1..100 chars; case-insensitive.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: includeDeleted
+          in: query
+          required: false
+          description: OWNER/ADMIN only. Silently forced to false for MEMBER/VIEWER.
+          schema: { type: boolean, default: false }
+        - name: transferId
+          in: query
+          required: false
+          description: Restricts the response to both pair-rows of a transfer.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Transactions page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionsPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createTransaction
+      summary: Create a standalone transaction (INCOME or EXPENSE)
+      description: |
+        Creates a single transaction. type=TRANSFER is rejected — transfers
+        must be created via POST /transfers. The row's currencyCode MUST
+        equal the target account's currency; mismatch returns
+        TRANSACTION_CURRENCY_MISMATCH (422). Archived accounts reject with
+        ACCOUNT_ARCHIVED (409).
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransactionInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /transactions/bulk-create:
+    post:
+      operationId: bulkCreateTransactions
+      summary: Create up to 500 transactions atomically
+      description: |
+        All-or-nothing bulk insert. Runs in a single Prisma transaction;
+        a single failing item aborts the whole batch (no partial state, no
+        partial balance drift). Role: MEMBER+.
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkCreateTransactionsInput' }
+      responses:
+        '201':
+          description: Batch created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkCreateTransactionsResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /transactions/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Transaction ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getTransaction
+      summary: Get one transaction
+      tags: [transactions]
+      responses:
+        '200':
+          description: Transaction
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateTransaction
+      summary: Update mutable transaction fields
+      description: |
+        Partial update of accountId, categoryId, amountMinor, occurredAt,
+        note. `type`, `currencyCode`, `transferId` are immutable — sending
+        them returns VALIDATION_ERROR. Rows with transferId != null reject
+        with TRANSACTION_BELONGS_TO_TRANSFER (409). An accountId change to
+        an account of a different currency returns
+        TRANSACTION_CURRENCY_MISMATCH (422).
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTransactionInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteTransaction
+      summary: Soft-delete a transaction
+      description: |
+        Reverses the signed balance delta and sets deletedAt. Blocks
+        transfer pair-rows (transferId != null) with
+        TRANSACTION_BELONGS_TO_TRANSFER (409). Idempotent: re-delete is a
+        200 no-op returning the already-deleted row.
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Soft-deleted transaction
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /transactions/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreTransaction
+      summary: Restore a soft-deleted transaction
+      description: |
+        Re-applies the signed balance delta. Blocks with ACCOUNT_ARCHIVED
+        (409) if the account has since been archived.
+      tags: [transactions]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored transaction
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /transfers:
+    post:
+      operationId: createTransfer
+      summary: Create an atomic transfer between two household accounts
+      description: |
+        Single Prisma transaction writes the transfers row and both paired
+        transactions (one EXPENSE-style row on source, one INCOME-style row
+        on destination), both tagged with the reserved system TRANSFER
+        category. sourceAccountId and destinationAccountId must differ
+        (TRANSFER_SAME_ACCOUNT, 422), both accounts must be active
+        (TRANSFER_ACCOUNT_ARCHIVED, 409), and both accounts' currencyCode
+        must equal the transfer currencyCode (TRANSFER_CURRENCY_MISMATCH,
+        422).
+      tags: [transfers]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransferInput' }
+      responses:
+        '201':
+          description: Created transfer with paired transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferWithPairedTransactions' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /transfers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Transfer ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getTransfer
+      summary: Get a transfer with its paired transactions
+      tags: [transfers]
+      responses:
+        '200':
+          description: Transfer with paired transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferWithPairedTransactions' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateTransfer
+      summary: Transfers are immutable
+      description: |
+        Always returns 405 TRANSFER_IMMUTABLE. Documented explicitly so the
+        generated client does not synthesize a mutation hook. Users must
+        delete and recreate.
+      tags: [transfers]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '405':
+          description: Transfer update is never permitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteTransfer
+      summary: Soft-delete a transfer and both pair-rows
+      description: |
+        Soft-deletes the transfer + both paired transactions and reverses
+        both balance deltas in a single Prisma transaction. Idempotent.
+      tags: [transfers]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Soft-deleted transfer with paired transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferWithPairedTransactions' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /transfers/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreTransfer
+      summary: Restore a soft-deleted transfer
+      description: |
+        Restores the transfer and both paired transactions and re-applies
+        both balance deltas. Blocks with ACCOUNT_ARCHIVED (409) if either
+        account is currently archived.
+      tags: [transfers]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored transfer with paired transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferWithPairedTransactions' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
   /invites/accept:
     post:
       operationId: acceptInvite
@@ -615,6 +1148,15 @@ components:
         - ACCOUNT_OPENING_BALANCE_LOCKED
         - ACCOUNT_ARCHIVED
         - CURRENCY_UNSUPPORTED
+        - TRANSACTION_CURRENCY_MISMATCH
+        - TRANSACTION_BELONGS_TO_TRANSFER
+        - TRANSFER_SAME_ACCOUNT
+        - TRANSFER_CURRENCY_MISMATCH
+        - TRANSFER_ACCOUNT_ARCHIVED
+        - TRANSFER_IMMUTABLE
+        - CATEGORY_SYSTEM_READONLY
+        - CATEGORY_TYPE_IMMUTABLE
+        - CATEGORY_TYPE_INVALID
 
     ErrorResponse:
       type: object
@@ -1038,6 +1580,337 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Account' }
 
+    CategoryType:
+      type: string
+      enum: [INCOME, EXPENSE, TRANSFER]
+      description: |
+        Category type. TRANSFER is reserved for the single system row that
+        backs transfer pair-transactions; users cannot create TRANSFER
+        categories.
+
+    Category:
+      type: object
+      required:
+        - id
+        - householdId
+        - key
+        - label
+        - type
+        - iconToken
+        - colorToken
+        - displayOrder
+        - isSystem
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId:
+          type: [string, 'null']
+          description: |
+            Owning household ULID. NULL identifies a system-default row
+            visible to every household.
+        key:
+          type: string
+          minLength: 1
+          maxLength: 48
+          pattern: '^[a-z0-9_]+$'
+          description: Machine-stable slug. Immutable after creation.
+        label:
+          type: string
+          minLength: 1
+          maxLength: 40
+        type: { $ref: '#/components/schemas/CategoryType' }
+        iconToken:
+          type: string
+          description: Key into `category.icons` design token set.
+        colorToken:
+          type: string
+          description: Key into `category.colors` design token set.
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Dense 0..N-1 ordering within the owning scope (system or per-household).
+        isSystem:
+          type: boolean
+          description: |
+            Convenience flag — derivable from `householdId === null` but
+            serialized so clients do not have to reimplement the check.
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the category is user-archived; hidden from pickers by default.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateCategoryInput:
+      type: object
+      required: [label, type]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 40
+        type:
+          type: string
+          enum: [INCOME, EXPENSE]
+          description: TRANSFER is rejected with CATEGORY_TYPE_INVALID.
+        iconToken: { type: string }
+        colorToken: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    UpdateCategoryInput:
+      type: object
+      description: |
+        All fields optional. `key`, `type`, `householdId` are immutable.
+        Sending `type` returns CATEGORY_TYPE_IMMUTABLE (422). System rows
+        reject any PATCH with CATEGORY_SYSTEM_READONLY (403).
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 40
+        iconToken: { type: string }
+        colorToken: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderCategoriesEntry:
+      type: object
+      required: [id, displayOrder]
+      properties:
+        id: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderCategoriesInput:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items: { $ref: '#/components/schemas/ReorderCategoriesEntry' }
+
+    ReorderCategoriesResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Category' }
+
+    CategoriesPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Category' }
+
+    TransactionType:
+      type: string
+      enum: [INCOME, EXPENSE, TRANSFER]
+      description: |
+        TRANSFER is reserved for pair-rows created by POST /transfers and is
+        rejected on POST /transactions.
+
+    Transaction:
+      type: object
+      required:
+        - id
+        - householdId
+        - accountId
+        - categoryId
+        - type
+        - amountMinor
+        - currencyCode
+        - occurredAt
+        - note
+        - transferId
+        - deletedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string }
+        accountId: { type: string }
+        categoryId: { type: string }
+        type: { $ref: '#/components/schemas/TransactionType' }
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: |
+            POSITIVE integer amount in the owning account's minor units,
+            encoded as a decimal string for bigint-safety. Sign is derived
+            from `type` server-side; never negative on the wire.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. MUST equal the owning account's currencyCode. Immutable.
+        occurredAt:
+          type: string
+          format: date-time
+          description: User-facing timestamp of the transaction. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        transferId:
+          type: [string, 'null']
+          description: Set on both pair-rows of a transfer; NULL on standalone transactions.
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateTransactionInput:
+      type: object
+      required: [accountId, categoryId, type, amountMinor, currencyCode]
+      properties:
+        accountId: { type: string }
+        categoryId: { type: string }
+        type:
+          type: string
+          enum: [INCOME, EXPENSE]
+          description: TRANSFER is rejected here; use POST /transfers.
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Positive minor-units amount as a decimal string.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        occurredAt:
+          type: string
+          format: date-time
+          description: Defaults to now() if omitted. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+
+    UpdateTransactionInput:
+      type: object
+      description: |
+        All fields optional. `type`, `currencyCode`, `transferId` are
+        immutable; sending them returns VALIDATION_ERROR. Transfer-paired
+        rows reject any PATCH with TRANSACTION_BELONGS_TO_TRANSFER (409).
+      properties:
+        accountId: { type: string }
+        categoryId: { type: string }
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        occurredAt: { type: string, format: date-time }
+        note:
+          type: [string, 'null']
+          maxLength: 500
+
+    TransactionsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Transaction' }
+
+    BulkCreateTransactionsInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: '#/components/schemas/CreateTransactionInput' }
+
+    BulkCreateTransactionsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Transaction' }
+
+    Transfer:
+      type: object
+      required:
+        - id
+        - householdId
+        - sourceAccountId
+        - destinationAccountId
+        - amountMinor
+        - currencyCode
+        - occurredAt
+        - note
+        - deletedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string }
+        sourceAccountId: { type: string }
+        destinationAccountId: { type: string }
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Positive minor-units amount as a decimal string.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217. MUST equal both accounts' currencyCode.
+        occurredAt:
+          type: string
+          format: date-time
+          description: Used as occurredAt on both pair-rows. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateTransferInput:
+      type: object
+      required: [sourceAccountId, destinationAccountId, amountMinor, currencyCode]
+      properties:
+        sourceAccountId: { type: string }
+        destinationAccountId: { type: string }
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        occurredAt:
+          type: string
+          format: date-time
+          description: Defaults to now() if omitted. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+
+    TransferWithPairedTransactions:
+      type: object
+      required: [transfer, sourceTransaction, destinationTransaction]
+      properties:
+        transfer: { $ref: '#/components/schemas/Transfer' }
+        sourceTransaction: { $ref: '#/components/schemas/Transaction' }
+        destinationTransaction: { $ref: '#/components/schemas/Transaction' }
+
 security:
   - BearerAuth: []
 
@@ -1052,3 +1925,9 @@ tags:
     description: Household tenants, members, and invites.
   - name: accounts
     description: Financial accounts owned by a household.
+  - name: categories
+    description: System-default and household-custom categories for transactions.
+  - name: transactions
+    description: Money-movement rows scoped to a household account.
+  - name: transfers
+    description: Atomic paired-write money movement between two household accounts.

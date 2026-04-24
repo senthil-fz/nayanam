@@ -6,10 +6,18 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { formatMoney } from '@nayanam/core';
-import { useAccount, useBalanceHistory } from '../../src/lib/hooks';
+import { useMemo } from 'react';
+import type { Category } from '@nayanam/core';
+import {
+  useAccount,
+  useBalanceHistory,
+  useCategories,
+  useTransactions,
+} from '../../src/lib/hooks';
 import { CardArt } from '../../src/features/cards/CardArt';
 import { Sparkline } from '../../src/features/cards/Sparkline';
 import { ChevLIcon } from '../../src/features/cards/icons';
+import { TransactionRow } from '../../src/features/transactions/TransactionRow';
 
 export default function CardDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,6 +25,17 @@ export default function CardDetail() {
   const accountQuery = useAccount(id);
   const history = useBalanceHistory(id, 6);
   const account = accountQuery.data;
+  const txns = useTransactions({ accountId: id ? [id] : undefined, limit: 10 });
+  const rows = useMemo(
+    () => txns.data?.pages.flatMap((p) => p.items).slice(0, 10) ?? [],
+    [txns.data],
+  );
+  const categoriesQuery = useCategories({ includeArchived: true });
+  const categoriesById = useMemo(() => {
+    const m = new Map<string, Category>();
+    for (const p of categoriesQuery.data?.pages ?? []) for (const c of p.items) m.set(c.id, c);
+    return m;
+  }, [categoriesQuery.data]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: LIGHT.bg }} edges={['top']}>
@@ -108,18 +127,52 @@ export default function CardDetail() {
               <Text style={{ fontSize: 15, fontWeight: '700', color: LIGHT.text, marginBottom: 10 }}>
                 Latest on this card
               </Text>
-              <View
-                style={{
-                  padding: 20,
-                  borderRadius: 18,
-                  backgroundColor: LIGHT.chipBg,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: LIGHT.textDim, fontSize: 13, textAlign: 'center' }}>
-                  Transactions land in Phase 3. Your history will appear here.
-                </Text>
-              </View>
+              {txns.isLoading ? (
+                <Text style={{ color: LIGHT.textDim, paddingVertical: 8 }}>Loading…</Text>
+              ) : rows.length === 0 ? (
+                <View
+                  style={{
+                    padding: 20,
+                    borderRadius: 18,
+                    backgroundColor: LIGHT.chipBg,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: LIGHT.textDim, fontSize: 13, textAlign: 'center' }}>
+                    No transactions on this account yet.
+                  </Text>
+                </View>
+              ) : (
+                <View
+                  style={{
+                    borderRadius: 16,
+                    backgroundColor: LIGHT.surface,
+                    borderWidth: 1,
+                    borderColor: LIGHT.border,
+                    paddingHorizontal: 14,
+                  }}
+                >
+                  {rows.map((t, idx) => (
+                    <View
+                      key={t.id}
+                      style={{
+                        borderBottomWidth: idx < rows.length - 1 ? 0.5 : 0,
+                        borderBottomColor: LIGHT.border,
+                      }}
+                    >
+                      <TransactionRow
+                        transaction={t}
+                        account={account}
+                        category={categoriesById.get(t.categoryId)}
+                        isTransferDestination={
+                          Boolean(t.transferId) && t.accountId === account.id
+                        }
+                        compact
+                      />
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </>
         )}

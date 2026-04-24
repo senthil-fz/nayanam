@@ -1,15 +1,19 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
 import { useAuthStore } from '../lib/api';
 import {
+  useAccounts,
   useAccountsSummary,
+  useCategories,
   useCreateHousehold,
   useHouseholds,
   useLogout,
   useMe,
+  useTransactions,
 } from '../lib/hooks';
-import { formatMoney } from '@nayanam/core';
+import { formatMoney, type Account, type Category, type Transaction } from '@nayanam/core';
 import { AppShell } from '../components/AppShell';
+import { TransactionList } from '../features/transactions/TransactionList';
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -23,8 +27,29 @@ function Home() {
   const logout = useLogout();
   const createHousehold = useCreateHousehold();
   const summary = useAccountsSummary();
+  const accountsQuery = useAccounts({ includeArchived: true });
+  const categoriesQuery = useCategories({ includeArchived: true });
+  const recentQuery = useTransactions({ limit: 8 });
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
+
+  const recent: Transaction[] = useMemo(
+    () => recentQuery.data?.pages[0]?.items.slice(0, 8) ?? [],
+    [recentQuery.data],
+  );
+  const accounts: Account[] = useMemo(
+    () => accountsQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [accountsQuery.data],
+  );
+  const categories: Category[] = useMemo(
+    () => categoriesQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [categoriesQuery.data],
+  );
+  const accountsById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const categoriesById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
 
   const activeHousehold =
     (households ?? me.data?.households ?? []).find((h) => h.id === activeId) ??
@@ -143,6 +168,37 @@ function Home() {
               Create
             </button>
           </form>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+            Recent activity
+          </div>
+          <Link
+            to="/transactions"
+            className="text-xs font-medium text-[var(--color-accent)] hover:underline"
+          >
+            See all
+          </Link>
+        </div>
+        {recentQuery.isError ? (
+          <p className="text-sm text-[var(--color-negative)]">
+            Couldn&apos;t load recent activity.
+          </p>
+        ) : recent.length === 0 && !recentQuery.isLoading ? (
+          <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-4 text-sm text-[var(--color-text-dim)]">
+            No transactions yet. <Link to="/transactions" className="underline">Record one</Link> to see it here.
+          </p>
+        ) : (
+          <TransactionList
+            transactions={recent}
+            accountsById={accountsById}
+            categoriesById={categoriesById}
+            isLoading={recentQuery.isLoading}
+            compact
+          />
         )}
       </section>
     </AppShell>

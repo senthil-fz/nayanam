@@ -1,0 +1,9 @@
+extends:
+  - recommended
+
+rules:
+  # PATCH /transfers/{id} is declared explicitly to return 405 TRANSFER_IMMUTABLE.
+  # A 2xx response on that operation would misrepresent the contract (transfers
+  # are strictly immutable; delete + recreate is the only path). All other
+  # operations in this spec already satisfy the rule.
+  operation-2xx-response: off

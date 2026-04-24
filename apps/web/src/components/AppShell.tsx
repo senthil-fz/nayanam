@@ -9,6 +9,8 @@ type Tab = { to: string; label: string };
 const TABS: Tab[] = [
   { to: '/', label: 'Home' },
   { to: '/cards', label: 'Cards' },
+  { to: '/transactions', label: 'Transactions' },
+  { to: '/categories', label: 'Categories' },
 ];
 
 export function AppShell({ children, right }: { children: ReactNode; right?: ReactNode }) {

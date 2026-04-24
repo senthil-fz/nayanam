@@ -35,14 +35,28 @@ export class BalanceService {
    * Apply a signed delta to `cached_balance_minor` with row-level locking.
    * Intended to be called from within an existing Prisma `$transaction` where
    * the corresponding transaction row is also being written.
+   *
+   * When `occurredAt` is supplied AND it falls before the account's
+   * `openingBalanceAt`, the delta is NOT applied to the cached balance (the
+   * transaction row still exists and is returned by list queries, but the
+   * opening-balance snapshot is the truth for that window). The caller still
+   * gets a successful return so the surrounding write completes atomically.
    */
   async applyDelta(
     tx: Prisma.TransactionClient,
     accountId: string,
     signedDeltaMinor: bigint,
+    occurredAt?: Date,
   ): Promise<void> {
     // Lock the row for the duration of the surrounding transaction.
-    await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${accountId} FOR UPDATE`;
+    const rows = await tx.$queryRaw<Array<{ opening_balance_at: Date }>>`
+      SELECT opening_balance_at FROM accounts WHERE id = ${accountId} FOR UPDATE
+    `;
+    const openingAt = rows[0]?.opening_balance_at;
+    if (occurredAt && openingAt && occurredAt < openingAt) {
+      // Pre-opening: row persists, cached balance unchanged.
+      return;
+    }
     await tx.$executeRaw`
       UPDATE accounts
          SET cached_balance_minor = cached_balance_minor + ${signedDeltaMinor}::bigint,
@@ -50,6 +64,17 @@ export class BalanceService {
              updated_at = now()
        WHERE id = ${accountId}
     `;
+  }
+
+  /**
+   * Predicate helper: whether a delta would actually be applied for a given
+   * `occurredAt` on the account. Used by restore paths to verify pre/post
+   * state without mutating. Not used on the hot path.
+   */
+  async shouldApplyDelta(accountId: string, occurredAt: Date): Promise<boolean> {
+    const acct = await this.prisma.account.findUnique({ where: { id: accountId } });
+    if (!acct) return false;
+    return occurredAt >= acct.openingBalanceAt;
   }
 
   /**
@@ -119,8 +144,10 @@ export class BalanceService {
 
   /**
    * Sum signed minor-units from `transactions` for the given account in
-   * [openingBalanceAt, upperBound]. Returns 0 when the table isn't present
-   * yet (Phase 2 precedes F-301).
+   * [openingBalanceAt, upperBound]. Signs are derived from `type`:
+   * INCOME/TRANSFER-destination add, EXPENSE/TRANSFER-source subtract. The
+   * `transactions.amount_minor` column is always positive; the sign is
+   * applied here so Stats queries can sum raw magnitudes cleanly.
    */
   private async sumTransactions(
     client: TxClient,
@@ -128,32 +155,45 @@ export class BalanceService {
     lower: Date,
     upper: Date | null,
   ): Promise<bigint> {
-    try {
-      const rows = upper
-        ? await client.$queryRaw<Array<{ total: bigint | null }>>`
-            SELECT COALESCE(SUM(amount_minor), 0)::bigint AS total
-              FROM transactions
-             WHERE account_id = ${accountId}
-               AND deleted_at IS NULL
-               AND occurred_at >= ${lower}
-               AND occurred_at <= ${upper}
-          `
-        : await client.$queryRaw<Array<{ total: bigint | null }>>`
-            SELECT COALESCE(SUM(amount_minor), 0)::bigint AS total
-              FROM transactions
-             WHERE account_id = ${accountId}
-               AND deleted_at IS NULL
-               AND occurred_at >= ${lower}
-          `;
-      return rows[0]?.total ?? 0n;
-    } catch (err) {
-      // transactions table doesn't exist yet (Phase 2). Treat as empty.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/transactions/i.test(msg) && /does not exist|relation/i.test(msg)) {
-        return 0n;
-      }
-      throw err;
-    }
+    // Signed sum: INCOME positive; EXPENSE negative; TRANSFER rows carry their
+    // sign based on whether this account is source or destination. Source
+    // transfers on an account are the ones whose paired transfer.source_account_id
+    // equals this account.
+    const rows = upper
+      ? await client.$queryRaw<Array<{ total: bigint | null }>>`
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN t.type = 'INCOME' THEN t.amount_minor
+              WHEN t.type = 'EXPENSE' THEN -t.amount_minor
+              WHEN t.type = 'TRANSFER' AND tr.source_account_id = ${accountId} THEN -t.amount_minor
+              WHEN t.type = 'TRANSFER' AND tr.destination_account_id = ${accountId} THEN t.amount_minor
+              ELSE 0
+            END
+          ), 0)::bigint AS total
+            FROM transactions t
+            LEFT JOIN transfers tr ON tr.id = t.transfer_id
+           WHERE t.account_id = ${accountId}
+             AND t.deleted_at IS NULL
+             AND t.occurred_at >= ${lower}
+             AND t.occurred_at <= ${upper}
+        `
+      : await client.$queryRaw<Array<{ total: bigint | null }>>`
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN t.type = 'INCOME' THEN t.amount_minor
+              WHEN t.type = 'EXPENSE' THEN -t.amount_minor
+              WHEN t.type = 'TRANSFER' AND tr.source_account_id = ${accountId} THEN -t.amount_minor
+              WHEN t.type = 'TRANSFER' AND tr.destination_account_id = ${accountId} THEN t.amount_minor
+              ELSE 0
+            END
+          ), 0)::bigint AS total
+            FROM transactions t
+            LEFT JOIN transfers tr ON tr.id = t.transfer_id
+           WHERE t.account_id = ${accountId}
+             AND t.deleted_at IS NULL
+             AND t.occurred_at >= ${lower}
+        `;
+    return rows[0]?.total ?? 0n;
   }
 }
 

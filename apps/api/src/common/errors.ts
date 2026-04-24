@@ -78,4 +78,61 @@ export const Errors = {
       HttpStatus.BAD_REQUEST,
       { currencyCode: code },
     ),
+  // --- Transactions / Transfers / Categories (Phase 3) ---
+  transactionCurrencyMismatch: (expected: string, got: string) =>
+    new AppError(
+      'TRANSACTION_CURRENCY_MISMATCH',
+      `Transaction currency "${got}" does not match the account currency "${expected}".`,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      { expected, got },
+    ),
+  transactionBelongsToTransfer: () =>
+    new AppError(
+      'TRANSACTION_BELONGS_TO_TRANSFER',
+      'This transaction is part of a transfer; edit or delete the transfer itself.',
+      HttpStatus.CONFLICT,
+    ),
+  transferSameAccount: () =>
+    new AppError(
+      'TRANSFER_SAME_ACCOUNT',
+      'Source and destination accounts must differ.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  transferCurrencyMismatch: (details?: Record<string, unknown>) =>
+    new AppError(
+      'TRANSFER_CURRENCY_MISMATCH',
+      'Transfer currency must match both accounts.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  transferAccountArchived: () =>
+    new AppError(
+      'TRANSFER_ACCOUNT_ARCHIVED',
+      'Cannot create or restore a transfer against an archived account.',
+      HttpStatus.CONFLICT,
+    ),
+  transferImmutable: () =>
+    new AppError(
+      'TRANSFER_IMMUTABLE',
+      'Transfers are immutable. Delete and recreate to change a transfer.',
+      HttpStatus.METHOD_NOT_ALLOWED,
+    ),
+  categorySystemReadonly: () =>
+    new AppError(
+      'CATEGORY_SYSTEM_READONLY',
+      'System-default categories cannot be modified.',
+      HttpStatus.FORBIDDEN,
+    ),
+  categoryTypeImmutable: () =>
+    new AppError(
+      'CATEGORY_TYPE_IMMUTABLE',
+      'Category type cannot be changed after creation.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  categoryTypeInvalid: () =>
+    new AppError(
+      'CATEGORY_TYPE_INVALID',
+      'Categories with type TRANSFER cannot be created by users.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
 };

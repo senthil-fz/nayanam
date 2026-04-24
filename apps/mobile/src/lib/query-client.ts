@@ -21,7 +21,14 @@ export const persistOptions = {
   dehydrateOptions: {
     shouldDehydrateQuery: (q: { queryKey: readonly unknown[] }) => {
       const root = q.queryKey[0];
-      return root === 'accounts' || root === 'me' || root === 'households';
+      return (
+        root === 'accounts' ||
+        root === 'me' ||
+        root === 'households' ||
+        root === 'transactions' ||
+        root === 'categories' ||
+        root === 'transfers'
+      );
     },
   },
 };

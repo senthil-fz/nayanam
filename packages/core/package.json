@@ -12,7 +12,9 @@
     "./hooks": "./src/hooks/index.ts",
     "./utils": "./src/utils/index.ts",
     "./api": "./src/api/client.ts",
-    "./accounts": "./src/accounts/index.ts"
+    "./accounts": "./src/accounts/index.ts",
+    "./categories": "./src/categories/index.ts",
+    "./transactions": "./src/transactions/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
