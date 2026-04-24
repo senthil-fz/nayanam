@@ -2,7 +2,8 @@
 // 4; spec raises to 5 and wires Add expense / Add income / Transfer into the
 // Phase 3 bottom sheets).
 
-import { Alert, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   ArrowRightLeft,
   Minus,
@@ -40,6 +41,7 @@ export function QuickActionsGrid({
   const { width } = useWindowDimensions();
   const labelFontSize = width < 360 ? 10 : 11;
   const mutateDisabled = !canMutate;
+  const router = useRouter();
 
   const runWithHaptic = (fn: () => void) => () => {
     hapticLight();
@@ -84,7 +86,7 @@ export function QuickActionsGrid({
       icon: <Receipt size={18} color={ACCENTS.indigo.hex} />,
       onPress: () => {
         hapticLight();
-        Alert.alert('Bills', 'Bills arrives in Phase 5.');
+        router.push('/(tabs)/bills');
       },
     },
   ];

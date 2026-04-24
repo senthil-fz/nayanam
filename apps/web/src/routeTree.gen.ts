@@ -15,6 +15,7 @@ import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as CardsRouteImport } from './routes/cards'
+import { Route as BillsRouteImport } from './routes/bills'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -38,6 +39,11 @@ const CardsRoute = CardsRouteImport.update({
   path: '/cards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BillsRoute = BillsRouteImport.update({
+  id: '/bills',
+  path: '/bills',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -52,6 +58,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/bills': typeof BillsRoute
   '/cards': typeof CardsRoute
   '/categories': typeof CategoriesRoute
   '/settings': typeof SettingsRoute
@@ -60,6 +67,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/bills': typeof BillsRoute
   '/cards': typeof CardsRoute
   '/categories': typeof CategoriesRoute
   '/settings': typeof SettingsRoute
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/bills': typeof BillsRoute
   '/cards': typeof CardsRoute
   '/categories': typeof CategoriesRoute
   '/settings': typeof SettingsRoute
@@ -79,16 +88,25 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/bills'
     | '/cards'
     | '/categories'
     | '/settings'
     | '/transactions'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/cards' | '/categories' | '/settings' | '/transactions'
+  to:
+    | '/'
+    | '/auth'
+    | '/bills'
+    | '/cards'
+    | '/categories'
+    | '/settings'
+    | '/transactions'
   id:
     | '__root__'
     | '/'
     | '/auth'
+    | '/bills'
     | '/cards'
     | '/categories'
     | '/settings'
@@ -98,6 +116,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  BillsRoute: typeof BillsRoute
   CardsRoute: typeof CardsRoute
   CategoriesRoute: typeof CategoriesRoute
   SettingsRoute: typeof SettingsRoute
@@ -134,6 +153,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CardsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bills': {
+      id: '/bills'
+      path: '/bills'
+      fullPath: '/bills'
+      preLoaderRoute: typeof BillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -154,6 +180,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  BillsRoute: BillsRoute,
   CardsRoute: CardsRoute,
   CategoriesRoute: CategoriesRoute,
   SettingsRoute: SettingsRoute,

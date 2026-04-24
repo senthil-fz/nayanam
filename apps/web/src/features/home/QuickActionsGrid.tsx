@@ -2,7 +2,7 @@
 
 import { Minus, Plus, ArrowRightLeft, ScanLine, Receipt } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { useToast } from '../../components/Toast';
+import { useNavigate } from '@tanstack/react-router';
 
 type Action = {
   key: string;
@@ -28,7 +28,7 @@ export function QuickActionsGrid({
   onAddIncome,
   onTransfer,
 }: Props) {
-  const toast = useToast();
+  const navigate = useNavigate();
   const mutateDisabled = !canMutate;
 
   const actions: Action[] = [
@@ -67,7 +67,9 @@ export function QuickActionsGrid({
       key: 'bills',
       label: 'Bills',
       icon: <Receipt size={16} aria-hidden />,
-      onClick: () => toast.show('Bills arrives in Phase 5.'),
+      onClick: () => {
+        void navigate({ to: '/bills' });
+      },
     },
   ];
 

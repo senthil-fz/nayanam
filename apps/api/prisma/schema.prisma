@@ -83,6 +83,8 @@ model Household {
   transactions  Transaction[]
   transfers     Transfer[]
   notifications Notification[]
+  bills         Bill[]
+  billPayments  BillPayment[]
 
   @@map("households")
 }
@@ -113,6 +115,7 @@ model Account {
   transactions        Transaction[]
   sourceTransfers     Transfer[]   @relation("TransferSourceAccount")
   destinationTransfers Transfer[]  @relation("TransferDestinationAccount")
+  bills               Bill[]
 
   @@index([householdId, displayOrder], map: "idx_accounts_household_display")
   @@index([householdId, archivedAt], map: "idx_accounts_household_archived")
@@ -138,6 +141,7 @@ model Category {
 
   household    Household?    @relation(fields: [householdId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  bills        Bill[]
 
   @@index([householdId, displayOrder], map: "idx_categories_household_order")
   @@index([householdId, type, archivedAt], map: "idx_categories_household_type_archived")
@@ -164,7 +168,8 @@ model Transaction {
   household Household @relation(fields: [householdId], references: [id])
   account   Account   @relation(fields: [accountId], references: [id])
   category  Category  @relation(fields: [categoryId], references: [id])
-  transfer  Transfer? @relation(fields: [transferId], references: [id])
+  transfer   Transfer?     @relation(fields: [transferId], references: [id])
+  billPayments BillPayment[]
 
   @@map("transactions")
 }
@@ -292,3 +297,67 @@ model Event {
   @@index([householdId, createdAt(sort: Desc)], map: "idx_events_household_created")
   @@map("events")
 }
+
+model Bill {
+  id                      String    @id @db.VarChar(26)
+  householdId             String    @map("household_id") @db.VarChar(26)
+  name                    String
+  amountMinor             BigInt    @map("amount_minor")
+  currencyCode            String    @map("currency_code") @db.Char(3)
+  accountId               String    @map("account_id") @db.VarChar(26)
+  categoryId              String    @map("category_id") @db.VarChar(26)
+  cycle                   String
+  customDays              Int?      @map("custom_days")
+  startAt                 DateTime  @default(now()) @map("start_at") @db.Timestamptz(6)
+  nextDueAt               DateTime  @map("next_due_at") @db.Timestamptz(6)
+  endAt                   DateTime? @map("end_at") @db.Timestamptz(6)
+  status                  String    @default("ACTIVE")
+  autoLog                 Boolean   @default(false) @map("auto_log")
+  lastPaidAt              DateTime? @map("last_paid_at") @db.Timestamptz(6)
+  lastNotifiedDueSoonAt   DateTime? @map("last_notified_due_soon_at") @db.Timestamptz(6)
+  lastNotifiedOverdueAt   DateTime? @map("last_notified_overdue_at") @db.Timestamptz(6)
+  note                    String?
+  colorToken              String?   @map("color_token")
+  iconToken               String?   @map("icon_token")
+  displayOrder            Int       @default(0) @map("display_order")
+  archivedAt              DateTime? @map("archived_at") @db.Timestamptz(6)
+  deletedAt               DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy               String    @map("created_by") @db.VarChar(26)
+  updatedBy               String    @map("updated_by") @db.VarChar(26)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household     @relation(fields: [householdId], references: [id])
+  account   Account       @relation(fields: [accountId], references: [id])
+  category  Category      @relation(fields: [categoryId], references: [id])
+  payments  BillPayment[]
+
+  @@index([householdId, status, nextDueAt], map: "idx_bills_household_status_due")
+  @@index([householdId, nextDueAt], map: "idx_bills_household_next_due")
+  @@index([householdId, displayOrder], map: "idx_bills_household_display_order")
+  @@index([accountId], map: "idx_bills_account")
+  @@index([categoryId], map: "idx_bills_category")
+  @@map("bills")
+}
+
+model BillPayment {
+  id            String    @id @db.VarChar(26)
+  householdId   String    @map("household_id") @db.VarChar(26)
+  billId        String    @map("bill_id") @db.VarChar(26)
+  transactionId String?   @map("transaction_id") @db.VarChar(26)
+  cycleDueAt    DateTime  @map("cycle_due_at") @db.Timestamptz(6)
+  paidAt        DateTime  @default(now()) @map("paid_at") @db.Timestamptz(6)
+  amountMinor   BigInt    @map("amount_minor")
+  source        String
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.VarChar(26)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household   Household    @relation(fields: [householdId], references: [id])
+  bill        Bill         @relation(fields: [billId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([householdId, billId, cycleDueAt(sort: Desc)], map: "idx_bill_payments_bill_cycle")
+  @@map("bill_payments")
+}
+

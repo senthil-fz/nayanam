@@ -135,4 +135,78 @@ export const Errors = {
       'Categories with type TRANSFER cannot be created by users.',
       HttpStatus.UNPROCESSABLE_ENTITY,
     ),
+  // --- Bills (Phase 5) ---
+  billCategoryTypeInvalid: () =>
+    new AppError(
+      'BILL_CATEGORY_TYPE_INVALID',
+      'Bill category must be of type EXPENSE.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  billCurrencyMismatch: (expected: string, got: string) =>
+    new AppError(
+      'BILL_CURRENCY_MISMATCH',
+      `Bill currency "${got}" does not match the account currency "${expected}".`,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      { expected, got },
+    ),
+  billCurrencyImmutable: () =>
+    new AppError(
+      'BILL_CURRENCY_IMMUTABLE',
+      'Bill currencyCode is immutable; it is derived from the account.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  billAccountArchived: () =>
+    new AppError(
+      'BILL_ACCOUNT_ARCHIVED',
+      'Target account is archived; restore it before mutating the bill.',
+      HttpStatus.CONFLICT,
+    ),
+  billCategoryArchived: () =>
+    new AppError(
+      'BILL_CATEGORY_ARCHIVED',
+      'Target category is archived.',
+      HttpStatus.CONFLICT,
+    ),
+  billAlreadyPaused: () =>
+    new AppError('BILL_ALREADY_PAUSED', 'Bill is already paused.', HttpStatus.CONFLICT),
+  billAlreadyActive: () =>
+    new AppError('BILL_ALREADY_ACTIVE', 'Bill is already active.', HttpStatus.CONFLICT),
+  billCustomDaysRequired: () =>
+    new AppError(
+      'BILL_CUSTOM_DAYS_REQUIRED',
+      'customDays is required when cycle = CUSTOM_DAYS.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  billCustomDaysInvalid: (details?: Record<string, unknown>) =>
+    new AppError(
+      'BILL_CUSTOM_DAYS_INVALID',
+      'customDays must be an integer between 1 and 366.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  billEndAtBeforeNextDue: () =>
+    new AppError(
+      'BILL_END_AT_BEFORE_NEXT_DUE',
+      'endAt must be on or after the next due date (or startAt on create).',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  billNameTaken: (name: string) =>
+    new AppError(
+      'BILL_NAME_TAKEN',
+      'An active bill with that name already exists.',
+      HttpStatus.CONFLICT,
+      { name },
+    ),
+  billPausedCannotPay: () =>
+    new AppError(
+      'BILL_PAUSED_CANNOT_PAY',
+      'Cannot mark a paused bill as paid.',
+      HttpStatus.CONFLICT,
+    ),
+  billPaymentNotLatest: () =>
+    new AppError(
+      'BILL_PAYMENT_NOT_LATEST',
+      'Only the latest non-deleted payment may be undone.',
+      HttpStatus.CONFLICT,
+    ),
 };

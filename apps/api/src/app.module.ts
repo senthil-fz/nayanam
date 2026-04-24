@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { HealthModule } from './modules/health/health.module';
@@ -14,6 +15,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { TransfersModule } from './transfers/transfers.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { BillsModule } from './bills/bills.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 
 @Module({
@@ -30,6 +32,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
       },
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     MailModule,
     AuthModule,
@@ -40,6 +43,7 @@ import { RequestContextMiddleware } from './common/context.middleware';
     TransactionsModule,
     TransfersModule,
     NotificationsModule,
+    BillsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

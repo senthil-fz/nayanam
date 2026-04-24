@@ -1,0 +1,221 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-005-phase-5-bills
+      author: nayanam
+      comment: |
+        Phase 5 — bills + bill_payments tables. Bills own a time-driven
+        lifecycle (cycle + nextDueAt + notification dedupe cursors). Enum-ish
+        text columns guarded by CHECK constraints (parallel to transactions.type).
+        Name uniqueness enforced via partial unique index on (household, lower(name))
+        WHERE not archived/deleted. bill_payments captures which transaction
+        satisfied which cycle so undo can operate without mutating transactions.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: bills
+      changes:
+        - createTable:
+            tableName: bills
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bills_household
+                    references: households(id)
+                    deleteCascade: false
+              - column: { name: name, type: TEXT, constraints: { nullable: false } }
+              - column: { name: amount_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: currency_code, type: CHAR(3), constraints: { nullable: false } }
+              - column:
+                  name: account_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bills_account
+                    references: accounts(id)
+                    deleteCascade: false
+              - column:
+                  name: category_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bills_category
+                    references: categories(id)
+                    deleteCascade: false
+              - column: { name: cycle, type: TEXT, constraints: { nullable: false } }
+              - column: { name: custom_days, type: INT }
+              - column: { name: start_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: next_due_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: end_at, type: TIMESTAMPTZ }
+              - column: { name: status, type: TEXT, defaultValue: 'ACTIVE', constraints: { nullable: false } }
+              - column: { name: auto_log, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: last_paid_at, type: TIMESTAMPTZ }
+              - column: { name: last_notified_due_soon_at, type: TIMESTAMPTZ }
+              - column: { name: last_notified_overdue_at, type: TIMESTAMPTZ }
+              - column: { name: note, type: TEXT }
+              - column: { name: color_token, type: TEXT }
+              - column: { name: icon_token, type: TEXT }
+              - column: { name: display_order, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: archived_at, type: TIMESTAMPTZ }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bills_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bills_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_cycle
+              CHECK (cycle IN ('WEEKLY','MONTHLY','QUARTERLY','YEARLY','CUSTOM_DAYS'));
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_status
+              CHECK (status IN ('ACTIVE','PAUSED'));
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_amount_positive
+              CHECK (amount_minor > 0);
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_custom_days_range
+              CHECK (custom_days IS NULL OR (custom_days >= 1 AND custom_days <= 366));
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_custom_days_required
+              CHECK (
+                (cycle = 'CUSTOM_DAYS' AND custom_days IS NOT NULL)
+                OR (cycle <> 'CUSTOM_DAYS' AND custom_days IS NULL)
+              );
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_name_len
+              CHECK (char_length(name) BETWEEN 1 AND 80);
+        - sql:
+            sql: >
+              ALTER TABLE bills ADD CONSTRAINT ck_bills_note_len
+              CHECK (note IS NULL OR char_length(note) <= 500);
+        - sql:
+            sql: >
+              CREATE INDEX idx_bills_household_status_due
+              ON bills (household_id, status, next_due_at)
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_bills_household_next_due
+              ON bills (household_id, next_due_at)
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_bills_household_display_order
+              ON bills (household_id, display_order)
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_bills_account
+              ON bills (account_id)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_bills_category
+              ON bills (category_id)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_bills_household_name_active
+              ON bills (household_id, lower(name))
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+
+        - createTable:
+            tableName: bill_payments
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bill_payments_household
+                    references: households(id)
+                    deleteCascade: false
+              - column:
+                  name: bill_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bill_payments_bill
+                    references: bills(id)
+                    deleteCascade: false
+              - column:
+                  name: transaction_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_bill_payments_transaction
+                    references: transactions(id)
+                    deleteCascade: false
+              - column: { name: cycle_due_at, type: TIMESTAMPTZ, constraints: { nullable: false } }
+              - column: { name: paid_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: amount_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: source, type: TEXT, constraints: { nullable: false } }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_bill_payments_created_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE bill_payments ADD CONSTRAINT ck_bill_payments_source
+              CHECK (source IN ('MANUAL','AUTO_LOG','BACKFILL'));
+        - sql:
+            sql: >
+              ALTER TABLE bill_payments ADD CONSTRAINT ck_bill_payments_amount_positive
+              CHECK (amount_minor > 0);
+        - sql:
+            sql: >
+              CREATE INDEX idx_bill_payments_bill_cycle
+              ON bill_payments (household_id, bill_id, cycle_due_at DESC);
+        - sql:
+            sql: >
+              CREATE INDEX idx_bill_payments_transaction
+              ON bill_payments (transaction_id)
+              WHERE transaction_id IS NOT NULL;
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bill_payments_transaction;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bill_payments_bill_cycle;
+        - dropTable:
+            tableName: bill_payments
+        - sql:
+            sql: DROP INDEX IF EXISTS uq_bills_household_name_active;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bills_category;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bills_account;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bills_household_display_order;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bills_household_next_due;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_bills_household_status_due;
+        - dropTable:
+            tableName: bills

@@ -11,6 +11,10 @@ import { AppState, View, Text, Pressable } from 'react-native';
 import { useAuthStore } from '../src/lib/api';
 import { getBiometricEnabled, promptBiometric } from '../src/lib/biometric';
 import { persistOptions, queryClient } from '../src/lib/query-client';
+import {
+  installBillPushHandler,
+  installBillPushResponseListener,
+} from '../src/lib/push-handlers';
 
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
@@ -19,6 +23,15 @@ export default function RootLayout() {
   const segments = useSegments();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const appStateRef = useRef(AppState.currentState);
+
+  // Phase 5: install the foreground bill-push handler + tap router once.
+  // Both are idempotent — installing twice is harmless — but we still gate
+  // on mount so StrictMode double-invoke doesn't stack listeners.
+  useEffect(() => {
+    installBillPushHandler();
+    const sub = installBillPushResponseListener();
+    return () => sub.remove();
+  }, []);
 
   // AppState → TanStack Query focus bridge. Pauses every query (including
   // the notification bell's 60s poll) while the app is backgrounded and

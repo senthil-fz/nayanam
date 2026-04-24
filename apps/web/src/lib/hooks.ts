@@ -1,6 +1,7 @@
 import {
   makeAccountHooks,
   makeAuthHooks,
+  makeBillHooks,
   makeCategoryHooks,
   makeNotificationHooks,
   makeTransactionHooks,
@@ -60,3 +61,20 @@ export const {
   useDeleteTransfer,
   useRestoreTransfer,
 } = makeTransactionHooks(apiClient);
+
+export const {
+  useBills,
+  useBill,
+  useBillsSummary,
+  useBillsUpcoming,
+  useBillPayments,
+  useCreateBill,
+  useUpdateBill,
+  useArchiveBill,
+  useRestoreBill,
+  usePauseBill,
+  useResumeBill,
+  useReorderBills,
+  useMarkBillPaid,
+  useUndoBillPayment,
+} = makeBillHooks(apiClient);

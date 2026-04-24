@@ -1137,6 +1137,400 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
 
+  /bills:
+    get:
+      operationId: listBills
+      summary: List bills with filters
+      description: |
+        Cursor paginated. Order: displayOrder ASC, createdAt ASC. Archived rows
+        (archivedAt IS NOT NULL) are excluded unless `includeArchived=true`.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, due-soon, active, paused]
+            default: all
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/BillStatus' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Bills page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillsPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createBill
+      summary: Create a bill
+      description: |
+        Creates a recurring bill. `currencyCode` is derived server-side from the
+        target account and is NOT accepted on the input. `customDays` is
+        required when `cycle = CUSTOM_DAYS` and rejected otherwise. The
+        referenced category must be of type EXPENSE; otherwise
+        BILL_CATEGORY_TYPE_INVALID (422). Archived accounts reject with
+        BILL_ACCOUNT_ARCHIVED (409).
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBillInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /bills/summary:
+    get:
+      operationId: getBillsSummary
+      summary: Per-currency bills totals
+      description: |
+        Returns per-currency monthly-normalized cost and due-soon totals across
+        active (non-archived) bills, plus household-wide active/paused counts.
+        Any household member role is permitted.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Bills summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillsSummaryResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /bills/upcoming:
+    get:
+      operationId: getBillsUpcoming
+      summary: Bills due within the next N days
+      description: |
+        Returns active (non-paused, non-archived) bills whose nextDueAt falls
+        within `[now(), now() + days]` (UTC), oldest→newest. Any household
+        member role is permitted.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+            default: 14
+      responses:
+        '200':
+          description: Upcoming bills
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillsUpcomingResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /bills/reorder:
+    post:
+      operationId: reorderBills
+      summary: Reorder bills (full-set)
+      description: |
+        Body carries the full desired ordering of non-archived bills in the
+        household. Server normalizes displayOrder to dense 0..N-1 in one
+        transaction.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderBillsInput' }
+      responses:
+        '200':
+          description: New ordering
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReorderBillsResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Bill ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getBill
+      summary: Get one bill
+      tags: [bills]
+      responses:
+        '200':
+          description: Bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateBill
+      summary: Update mutable bill fields
+      description: |
+        Partial update. `currencyCode` is immutable (derived from the account)
+        and sending it returns BILL_CURRENCY_IMMUTABLE (422). An accountId
+        change to an account of a different currency returns
+        BILL_CURRENCY_MISMATCH (422). Archived accounts return
+        BILL_ACCOUNT_ARCHIVED (409). Category type mismatch returns
+        BILL_CATEGORY_TYPE_INVALID (422). `endAt` before `nextDueAt` returns
+        BILL_END_AT_BEFORE_NEXT_DUE (422). `cycle = CUSTOM_DAYS` without a
+        valid `customDays` returns BILL_CUSTOM_DAYS_REQUIRED or
+        BILL_CUSTOM_DAYS_INVALID (422).
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateBillInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: archiveBill
+      summary: Archive (or hard-delete) a bill
+      description: |
+        Archives the bill (sets archivedAt). If the bill has zero lifetime
+        payments, behaves as a true delete and sets deletedAt instead.
+        Idempotent: re-archiving returns 200.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Archived (or hard-deleted) bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreBill
+      summary: Restore an archived bill
+      description: |
+        Clears archivedAt. Returns RESOURCE_NOT_FOUND if the bill was
+        hard-deleted. Idempotent.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/pause:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: pauseBill
+      summary: Pause a bill
+      description: |
+        Transitions status ACTIVE → PAUSED. If already PAUSED, returns
+        BILL_ALREADY_PAUSED (409).
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Paused bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/resume:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: resumeBill
+      summary: Resume a paused bill
+      description: |
+        Transitions status PAUSED → ACTIVE. If already ACTIVE, returns
+        BILL_ALREADY_ACTIVE (409). Also rolls `nextDueAt` forward if needed so
+        it is not in the past.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Resumed bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/mark-paid:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: markBillPaid
+      summary: Record a payment against a bill
+      description: |
+        Writes a BillPayment row for the current cycle, creates the backing
+        EXPENSE Transaction on the bill's account, advances `nextDueAt` to the
+        next cycle, and updates `lastPaidAt`. All within a single Prisma
+        transaction. Archived accounts return BILL_ACCOUNT_ARCHIVED (409).
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkBillPaidInput' }
+      responses:
+        '201':
+          description: Payment recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarkBillPaidResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/payments/{paymentId}/undo:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: paymentId
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: undoBillPayment
+      summary: Undo the latest payment for a bill
+      description: |
+        Soft-deletes the referenced BillPayment and its backing Transaction
+        and rewinds `nextDueAt` one cycle. Only the latest non-deleted payment
+        may be undone; otherwise BILL_PAYMENT_NOT_LATEST (409).
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bill' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /bills/{id}/payments:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: listBillPayments
+      summary: List payment history for a bill
+      description: |
+        Cursor paginated. Order: paidAt DESC, id DESC. Excludes soft-deleted
+        payment rows.
+      tags: [bills]
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Bill payments page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillPaymentsPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
   /notifications/unread-count:
     get:
       operationId: getNotificationsUnreadCount
@@ -1252,6 +1646,16 @@ components:
         - CATEGORY_SYSTEM_READONLY
         - CATEGORY_TYPE_IMMUTABLE
         - CATEGORY_TYPE_INVALID
+        - BILL_CATEGORY_TYPE_INVALID
+        - BILL_CURRENCY_MISMATCH
+        - BILL_ACCOUNT_ARCHIVED
+        - BILL_ALREADY_PAUSED
+        - BILL_ALREADY_ACTIVE
+        - BILL_CUSTOM_DAYS_REQUIRED
+        - BILL_CUSTOM_DAYS_INVALID
+        - BILL_CURRENCY_IMMUTABLE
+        - BILL_PAYMENT_NOT_LATEST
+        - BILL_END_AT_BEFORE_NEXT_DUE
 
     ErrorResponse:
       type: object
@@ -2121,6 +2525,386 @@ components:
         sourceTransaction: { $ref: '#/components/schemas/Transaction' }
         destinationTransaction: { $ref: '#/components/schemas/Transaction' }
 
+    BillCycle:
+      type: string
+      enum: [WEEKLY, MONTHLY, QUARTERLY, YEARLY, CUSTOM_DAYS]
+      description: |
+        Billing cadence. CUSTOM_DAYS requires a positive `customDays` value on
+        the owning Bill; every other value MUST have `customDays = null`.
+
+    BillStatus:
+      type: string
+      enum: [ACTIVE, PAUSED]
+      description: |
+        ACTIVE bills roll their `nextDueAt` forward and emit due-soon /
+        overdue notifications. PAUSED bills retain their state but do not
+        advance and do not notify.
+
+    BillPaymentSource:
+      type: string
+      enum: [MANUAL, AUTO_LOG, BACKFILL]
+      description: |
+        MANUAL — explicit POST /bills/:id/mark-paid from a client.
+        AUTO_LOG — system-recorded when a matching Transaction is detected
+        against an auto-log bill.
+        BACKFILL — historical import / reconciliation.
+
+    Bill:
+      type: object
+      required:
+        - id
+        - householdId
+        - name
+        - amountMinor
+        - currencyCode
+        - accountId
+        - categoryId
+        - cycle
+        - customDays
+        - startAt
+        - nextDueAt
+        - endAt
+        - status
+        - autoLog
+        - lastPaidAt
+        - note
+        - colorToken
+        - iconToken
+        - displayOrder
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: |
+            Positive minor-units amount in the bill's currency, encoded as a
+            decimal string for bigint-safety.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: |
+            ISO 4217 uppercase code. Derived from the owning account at create
+            time and immutable thereafter.
+        accountId: { type: string }
+        categoryId:
+          type: string
+          description: Must reference an EXPENSE-type category.
+        cycle: { $ref: '#/components/schemas/BillCycle' }
+        customDays:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 3650
+          description: |
+            Required when `cycle = CUSTOM_DAYS`. NULL for every other cycle
+            value.
+        startAt:
+          type: string
+          format: date-time
+          description: First billing instant. UTC.
+        nextDueAt:
+          type: string
+          format: date-time
+          description: |
+            Next upcoming due instant, advanced on mark-paid and by the
+            scheduler. UTC.
+        endAt:
+          type: [string, 'null']
+          format: date-time
+          description: Optional end of the recurrence. UTC. Must be ≥ nextDueAt.
+        status: { $ref: '#/components/schemas/BillStatus' }
+        autoLog:
+          type: boolean
+          description: |
+            When true, matching Transactions on the bill's account may
+            auto-log a BillPayment without requiring explicit mark-paid.
+        lastPaidAt:
+          type: [string, 'null']
+          format: date-time
+          description: Timestamp of the most recent non-deleted BillPayment. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken: { type: [string, 'null'] }
+        iconToken: { type: [string, 'null'] }
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Dense 0..N-1 ordering per household.
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the bill is user-archived; hidden from default lists.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BillPayment:
+      type: object
+      required:
+        - id
+        - householdId
+        - billId
+        - transactionId
+        - cycleDueAt
+        - paidAt
+        - amountMinor
+        - source
+        - deletedAt
+        - createdAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string }
+        billId: { type: string }
+        transactionId:
+          type: [string, 'null']
+          description: |
+            Backing Transaction ULID. NULL when the payment was recorded
+            without (yet) materializing a Transaction.
+        cycleDueAt:
+          type: string
+          format: date-time
+          description: The `nextDueAt` value this payment satisfies. UTC.
+        paidAt:
+          type: string
+          format: date-time
+          description: Instant the payment was recorded. UTC.
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Positive minor-units amount paid, as a decimal string.
+        source: { $ref: '#/components/schemas/BillPaymentSource' }
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt: { type: string, format: date-time }
+
+    CreateBillInput:
+      type: object
+      description: |
+        `currencyCode` is deliberately not accepted on input — it is derived
+        server-side from the target account at create time. Supplying it is
+        silently ignored. `customDays` is required iff `cycle = CUSTOM_DAYS`.
+      required: [name, amountMinor, accountId, categoryId, cycle]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Positive minor-units amount as a decimal string.
+        accountId: { type: string }
+        categoryId: { type: string }
+        cycle: { $ref: '#/components/schemas/BillCycle' }
+        customDays:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 3650
+        startAt:
+          type: string
+          format: date-time
+          description: Defaults to `now()` if omitted. UTC.
+        autoLog: { type: boolean, default: false }
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken: { type: [string, 'null'] }
+        iconToken: { type: [string, 'null'] }
+        endAt:
+          type: [string, 'null']
+          format: date-time
+
+    UpdateBillInput:
+      type: object
+      description: |
+        All fields optional. `currencyCode` is immutable (derived from the
+        account); sending it returns BILL_CURRENCY_IMMUTABLE (422). Changing
+        `accountId` to an account of a different currency returns
+        BILL_CURRENCY_MISMATCH (422).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        accountId: { type: string }
+        categoryId: { type: string }
+        cycle: { $ref: '#/components/schemas/BillCycle' }
+        customDays:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 3650
+        startAt: { type: string, format: date-time }
+        autoLog: { type: boolean }
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken: { type: [string, 'null'] }
+        iconToken: { type: [string, 'null'] }
+        endAt:
+          type: [string, 'null']
+          format: date-time
+
+    MarkBillPaidInput:
+      type: object
+      description: |
+        All fields optional. When omitted, `amountMinor` defaults to the
+        bill's current amount, `occurredAt` defaults to `now()`, and `source`
+        defaults to `MANUAL`.
+      properties:
+        amountMinor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        occurredAt:
+          type: string
+          format: date-time
+          description: Instant the payment was made. UTC.
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        source: { $ref: '#/components/schemas/BillPaymentSource' }
+
+    MarkBillPaidResponse:
+      type: object
+      required: [bill, payment, transaction]
+      properties:
+        bill: { $ref: '#/components/schemas/Bill' }
+        payment: { $ref: '#/components/schemas/BillPayment' }
+        transaction: { $ref: '#/components/schemas/Transaction' }
+
+    ReorderBillsEntry:
+      type: object
+      required: [id, displayOrder]
+      properties:
+        id: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderBillsInput:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items: { $ref: '#/components/schemas/ReorderBillsEntry' }
+
+    ReorderBillsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Bill' }
+
+    BillsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Bill' }
+
+    BillsSummaryCurrencyBucket:
+      type: object
+      required:
+        - currencyCode
+        - monthlyCostMinor
+        - dueSoonMinor
+        - activeCount
+        - pausedCount
+        - dueSoonCount
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        monthlyCostMinor:
+          type: string
+          description: |
+            Monthly-normalized cost across active bills in this currency
+            (bigint-safe decimal string).
+        dueSoonMinor:
+          type: string
+          description: |
+            Sum of amounts for active bills whose nextDueAt falls within the
+            default due-soon window (bigint-safe decimal string).
+        activeCount:
+          type: integer
+          minimum: 0
+        pausedCount:
+          type: integer
+          minimum: 0
+        dueSoonCount:
+          type: integer
+          minimum: 0
+
+    BillsSummaryTotalsAllCurrencies:
+      type: object
+      required: [activeCount, pausedCount]
+      properties:
+        activeCount:
+          type: integer
+          minimum: 0
+        pausedCount:
+          type: integer
+          minimum: 0
+
+    BillsSummaryResponse:
+      type: object
+      required: [byCurrency, totalsAllCurrencies]
+      properties:
+        byCurrency:
+          type: array
+          items: { $ref: '#/components/schemas/BillsSummaryCurrencyBucket' }
+        totalsAllCurrencies: { $ref: '#/components/schemas/BillsSummaryTotalsAllCurrencies' }
+
+    UpcomingBillItem:
+      type: object
+      required: [bill, dueAt, daysUntilDue]
+      properties:
+        bill: { $ref: '#/components/schemas/Bill' }
+        dueAt:
+          type: string
+          format: date-time
+          description: Resolved due instant for this occurrence. UTC.
+        daysUntilDue:
+          type: integer
+          description: |
+            Whole-day count between `now()` and `dueAt` (UTC). May be 0 for
+            today; negative values are not returned by this endpoint.
+
+    BillsUpcomingResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/UpcomingBillItem' }
+
+    BillPaymentsPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/BillPayment' }
+
 security:
   - BearerAuth: []
 
@@ -2141,5 +2925,7 @@ tags:
     description: Money-movement rows scoped to a household account.
   - name: transfers
     description: Atomic paired-write money movement between two household accounts.
+  - name: bills
+    description: Recurring bills and subscriptions with scheduled due dates and payment history.
   - name: notifications
     description: Per-user notification surfaces (unread counts, list, mark-read).

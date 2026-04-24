@@ -111,12 +111,12 @@ Maps to prototype "Bills" screen.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-501 | `Bill` table: name, amountMinor, currencyCode, cycle (weekly/monthly/quarterly/yearly/custom-days), nextDueAt, status (active/paused), categoryId, accountId, autoLog boolean | api | todo | |
-| F-502 | Bill scheduler job (daily): advance `nextDueAt`, create `Transaction` when `autoLog`, emit `bill.due_soon` + `bill.overdue` events, send notification | api | todo | |
-| F-503 | Bill CRUD endpoints + list filters (all/due-soon/active/paused) + totals endpoint (monthly cost, active count, paused count, due-soon amount) | api | todo | |
-| F-504 | Mark bill paid manually (creates transaction, advances cycle) | api | todo | |
-| F-505 | Web: Bills screen — totals card, 14-day upcoming timeline, filter chips, list, add/edit/pause/resume | web | todo | |
-| F-506 | Mobile: Bills screen parity + push notifications for due-soon/overdue | mobile | todo | |
+| F-501 | `Bill` table: name, amountMinor, currencyCode, cycle (weekly/monthly/quarterly/yearly/custom-days), nextDueAt, status (active/paused), categoryId, accountId, autoLog boolean | api | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
+| F-502 | Bill scheduler job (daily): advance `nextDueAt`, create `Transaction` when `autoLog`, emit `bill.due_soon` + `bill.overdue` events, send notification | api | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
+| F-503 | Bill CRUD endpoints + list filters (all/due-soon/active/paused) + totals endpoint (monthly cost, active count, paused count, due-soon amount) | api | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
+| F-504 | Mark bill paid manually (creates transaction, advances cycle) | api | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
+| F-505 | Web: Bills screen — totals card, 14-day upcoming timeline, filter chips, list, add/edit/pause/resume | web | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
+| F-506 | Mobile: Bills screen parity + push notifications for due-soon/overdue | mobile | shipped | [spec](specs/2026-04-24-phase-5-bills.md) |
 
 ## Phase 6 — Budgets
 

@@ -10,6 +10,7 @@ const TABS: Tab[] = [
   { to: '/', label: 'Home' },
   { to: '/cards', label: 'Cards' },
   { to: '/transactions', label: 'Transactions' },
+  { to: '/bills', label: 'Bills' },
   { to: '/categories', label: 'Categories' },
 ];
 

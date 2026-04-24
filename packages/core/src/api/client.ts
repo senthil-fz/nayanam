@@ -48,6 +48,19 @@ type PeriodEnum = ApiSchemas['PeriodEnum'];
 type NotificationUnreadCountResponse =
   ApiSchemas['NotificationUnreadCountResponse'];
 
+type Bill = ApiSchemas['Bill'];
+type BillsPage = ApiSchemas['BillsPage'];
+type BillPaymentsPage = ApiSchemas['BillPaymentsPage'];
+type BillsSummaryResponse = ApiSchemas['BillsSummaryResponse'];
+type BillsUpcomingResponse = ApiSchemas['BillsUpcomingResponse'];
+type CreateBillInput = ApiSchemas['CreateBillInput'];
+type UpdateBillInput = ApiSchemas['UpdateBillInput'];
+type MarkBillPaidInput = ApiSchemas['MarkBillPaidInput'];
+type MarkBillPaidResponse = ApiSchemas['MarkBillPaidResponse'];
+type ReorderBillsInput = ApiSchemas['ReorderBillsInput'];
+type ReorderBillsResponse = ApiSchemas['ReorderBillsResponse'];
+type BillStatus = ApiSchemas['BillStatus'];
+
 export type ApiError = {
   status: number;
   code: string;
@@ -372,6 +385,50 @@ export function createApiClient(opts: ApiClientOptions) {
         method: 'POST',
         idempotencyKey,
       }),
+
+    // Bills (household-scoped)
+    listBills: (params?: {
+      cursor?: string;
+      limit?: number;
+      filter?: 'all' | 'due-soon' | 'active' | 'paused';
+      status?: BillStatus;
+      includeArchived?: boolean;
+    }) => request<BillsPage>('/bills', { query: params }),
+    getBill: (id: string) => request<Bill>(`/bills/${id}`),
+    createBill: (body: CreateBillInput, idempotencyKey?: string) =>
+      request<Bill>('/bills', { method: 'POST', body, idempotencyKey }),
+    updateBill: (id: string, body: UpdateBillInput, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}`, { method: 'PATCH', body, idempotencyKey }),
+    archiveBill: (id: string, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}`, { method: 'DELETE', idempotencyKey }),
+    restoreBill: (id: string, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}/restore`, { method: 'POST', idempotencyKey }),
+    pauseBill: (id: string, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}/pause`, { method: 'POST', idempotencyKey }),
+    resumeBill: (id: string, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}/resume`, { method: 'POST', idempotencyKey }),
+    reorderBills: (body: ReorderBillsInput, idempotencyKey?: string) =>
+      request<ReorderBillsResponse>('/bills/reorder', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    markBillPaid: (id: string, body: MarkBillPaidInput, idempotencyKey?: string) =>
+      request<MarkBillPaidResponse>(`/bills/${id}/mark-paid`, {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    listBillPayments: (id: string, params?: { cursor?: string; limit?: number }) =>
+      request<BillPaymentsPage>(`/bills/${id}/payments`, { query: params }),
+    undoBillPayment: (id: string, paymentId: string, idempotencyKey?: string) =>
+      request<Bill>(`/bills/${id}/payments/${paymentId}/undo`, {
+        method: 'POST',
+        idempotencyKey,
+      }),
+    getBillsSummary: () => request<BillsSummaryResponse>('/bills/summary'),
+    getBillsUpcoming: (days = 14) =>
+      request<BillsUpcomingResponse>('/bills/upcoming', { query: { days } }),
 
     // Generic escape hatch
     raw: request,

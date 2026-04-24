@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
+import { ReceiptText } from 'lucide-react-native';
 import { LIGHT, ACCENTS } from '@nayanam/ui-tokens';
-import { HomeIcon, StatsIcon, BillsIcon, CardIcon } from '../../src/features/cards/icons';
+import { HomeIcon, StatsIcon, CardIcon } from '../../src/features/cards/icons';
 
 // Bottom-tab shell matching the prototype: Home · Stats · Bills · Cards · Settings.
 // The central scan FAB is deferred to a later phase; the scan action lives on Home.
@@ -51,7 +52,7 @@ export default function TabsLayout() {
         name="bills"
         options={{
           title: 'Bills',
-          tabBarIcon: ({ color }) => <BillsIcon color={color} size={22} />,
+          tabBarIcon: ({ color }) => <ReceiptText color={color} size={22} />,
         }}
       />
       <Tabs.Screen

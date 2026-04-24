@@ -240,6 +240,27 @@ export const category = {
   defaultIcon: DEFAULT_CATEGORY_ICON,
 } as const;
 
+// ─────────────────────────────────────────────────────────────
+// Bill cycle tokens — consumed by web Bills + mobile Bills to
+// render a per-cycle icon chip on bill rows. Icon names match
+// lucide-react component names (kebab-case).
+// ─────────────────────────────────────────────────────────────
+
+export const CYCLE_ICONS = {
+  WEEKLY:      'calendar-clock',
+  MONTHLY:     'calendar-days',
+  QUARTERLY:   'calendar-range',
+  YEARLY:      'calendar-check',
+  CUSTOM_DAYS: 'calendar-plus',
+} as const;
+
+export type CycleKey = keyof typeof CYCLE_ICONS;
+export type CycleIconToken = (typeof CYCLE_ICONS)[CycleKey];
+
+export const cycle = {
+  icons: CYCLE_ICONS,
+} as const;
+
 export const tokens = {
   accents: ACCENTS,
   light: LIGHT,
@@ -250,4 +271,5 @@ export const tokens = {
   categories: CATEGORIES,
   account,
   category,
+  cycle,
 } as const;
