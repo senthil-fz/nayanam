@@ -18,3 +18,7 @@ android/build/
 android/app/build/
 *.tsbuildinfo
 packages/contracts/src/generated.ts
+
+# Local agent / orchestrator workspaces — not part of the codebase
+.jarvis/
+.prometheus/

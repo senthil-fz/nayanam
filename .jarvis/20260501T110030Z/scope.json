@@ -1,8 +1,0 @@
-{
-  "base": "7538c5cb95bed851ffae83bf690566edbe0011d8",
-  "mode": "full-rereview",
-  "context": "Phase 4 re-review of phase-11-hardening-fix. Re-validating all 23 BLOCKERs and 38 fix-now MAJORs from .jarvis/20260501T091726Z/report.md.",
-  "timestamp": "2026-05-01T11:00:30Z",
-  "previous_review": ".jarvis/20260501T091726Z/report.md",
-  "fix_workspace": ".prometheus/phase-11-hardening-fix/"
-}
