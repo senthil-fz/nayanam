@@ -8,6 +8,7 @@ import { getContext, getAuthOrThrow, getHouseholdOrThrow } from '../common/conte
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import { BalanceService } from './balance.service';
 import type { AccountDTO } from './accounts.dto';
+import { EventType } from '../common/event-types';
 
 const TERMINAL_MUTATION_ROLE = 'ADMIN' as const; // archive/restore/delete
 const WRITE_ROLE = 'MEMBER' as const; // create/update/reorder
@@ -208,7 +209,7 @@ export class AccountsService {
           },
         });
 
-        await recordEvent(tx, householdId, userId, 'account.created', {
+        await recordEvent(tx, householdId, userId, EventType.ACCOUNT_CREATED, {
           accountId: row.id,
           nickname: row.nickname,
           type: row.type,
@@ -324,7 +325,7 @@ export class AccountsService {
         const row = await tx.account.update({ where: { id }, data });
 
         if (changed.length > 0) {
-          await recordEvent(tx, existing.householdId, userId, 'account.updated', {
+          await recordEvent(tx, existing.householdId, userId, EventType.ACCOUNT_UPDATED, {
             accountId: id,
             changedFields: changed,
             before,
@@ -357,7 +358,7 @@ export class AccountsService {
           where: { id },
           data: { deletedAt: new Date(), updatedBy: userId },
         });
-        await recordEvent(tx, existing.householdId, userId, 'account.deleted', {
+        await recordEvent(tx, existing.householdId, userId, EventType.ACCOUNT_DELETED, {
           accountId: id,
           nickname: existing.nickname,
         });
@@ -372,7 +373,7 @@ export class AccountsService {
         where: { id },
         data: { archivedAt: new Date(), updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId, userId, 'account.archived', {
+      await recordEvent(tx, existing.householdId, userId, EventType.ACCOUNT_ARCHIVED, {
         accountId: id,
         nickname: existing.nickname,
       });
@@ -402,7 +403,7 @@ export class AccountsService {
         where: { id },
         data: { archivedAt: null, updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId, userId, 'account.restored', {
+      await recordEvent(tx, existing.householdId, userId, EventType.ACCOUNT_RESTORED, {
         accountId: id,
         nickname: row.nickname,
       });
@@ -463,7 +464,7 @@ export class AccountsService {
           }),
         ),
       );
-      await recordEvent(tx, householdId, userId, 'account.reordered', {
+      await recordEvent(tx, householdId, userId, EventType.ACCOUNT_REORDERED, {
         order: finalOrder.map((id, idx) => ({ accountId: id, displayOrder: idx })),
       });
       return tx.account.findMany({
@@ -522,7 +523,7 @@ async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

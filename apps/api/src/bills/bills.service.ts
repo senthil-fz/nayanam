@@ -6,6 +6,7 @@ import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
+import { EventType } from '../common/event-types';
 import {
   advance,
   normalizedMonthlyCostMinor,
@@ -293,7 +294,7 @@ export class BillsService {
           },
         });
 
-        await recordEvent(tx, householdId, userId, 'bill.created', {
+        await recordEvent(tx, householdId, userId, EventType.BILL_CREATED, {
           billId: created.id,
           name: created.name,
           amountMinor: created.amountMinor.toString(),
@@ -488,7 +489,7 @@ export class BillsService {
         const row = await tx.bill.update({ where: { id }, data });
 
         if (changed.length > 0) {
-          await recordEvent(tx, householdId, userId, 'bill.updated', {
+          await recordEvent(tx, householdId, userId, EventType.BILL_UPDATED, {
             billId: id,
             changedFields: changed,
             before,
@@ -521,7 +522,7 @@ export class BillsService {
           where: { id },
           data: { deletedAt: new Date(), updatedBy: userId },
         });
-        await recordEvent(tx, existing.householdId, userId, 'bill.deleted', {
+        await recordEvent(tx, existing.householdId, userId, EventType.BILL_DELETED, {
           billId: id,
           name: existing.name,
         });
@@ -533,7 +534,7 @@ export class BillsService {
         where: { id },
         data: { archivedAt: new Date(), updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId, userId, 'bill.archived', {
+      await recordEvent(tx, existing.householdId, userId, EventType.BILL_ARCHIVED, {
         billId: id,
         name: existing.name,
       });
@@ -559,7 +560,7 @@ export class BillsService {
           where: { id },
           data: { archivedAt: null, updatedBy: userId },
         });
-        await recordEvent(tx, householdId, userId, 'bill.restored', {
+        await recordEvent(tx, householdId, userId, EventType.BILL_RESTORED, {
           billId: id,
           name: row.name,
         });
@@ -589,7 +590,7 @@ export class BillsService {
           updatedBy: userId,
         },
       });
-      await recordEvent(tx, existing.householdId, userId, 'bill.paused', {
+      await recordEvent(tx, existing.householdId, userId, EventType.BILL_PAUSED, {
         billId: id,
       });
       return row;
@@ -631,7 +632,7 @@ export class BillsService {
           updatedBy: userId,
         },
       });
-      await recordEvent(tx, householdId, userId, 'bill.resumed', {
+      await recordEvent(tx, householdId, userId, EventType.BILL_RESUMED, {
         billId: id,
         advancedCycles: advanced,
       });
@@ -682,7 +683,7 @@ export class BillsService {
           }),
         ),
       );
-      await recordEvent(tx, householdId, userId, 'bill.reordered', {
+      await recordEvent(tx, householdId, userId, EventType.BILL_REORDERED, {
         order: finalOrder.map((id, idx) => ({ billId: id, displayOrder: idx })),
       });
       return tx.bill.findMany({
@@ -821,7 +822,7 @@ export class BillsService {
         },
       });
 
-      await recordEvent(tx, householdId, input.actorUserId, 'bill.paid', {
+      await recordEvent(tx, householdId, input.actorUserId, EventType.BILL_PAID, {
         billId: id,
         paymentId: payment.id,
         transactionId: txId,
@@ -833,7 +834,7 @@ export class BillsService {
       });
 
       // Transaction-level event matches Phase 3 semantics.
-      await recordEvent(tx, householdId, input.actorUserId, 'transaction.created', {
+      await recordEvent(tx, householdId, input.actorUserId, EventType.TRANSACTION_CREATED, {
         transactionId: txId,
         accountId: existing.accountId,
         categoryId: existing.categoryId,
@@ -929,7 +930,7 @@ export class BillsService {
             data: { deletedAt: new Date(), updatedBy: userId },
           });
           reversedTxId = txRow.id;
-          await recordEvent(tx, householdId, userId, 'transaction.deleted', {
+          await recordEvent(tx, householdId, userId, EventType.TRANSACTION_DELETED, {
             transactionId: txRow.id,
             accountId: txRow.accountId,
             amountMinor: txRow.amountMinor.toString(),
@@ -954,7 +955,7 @@ export class BillsService {
         },
       });
 
-      await recordEvent(tx, householdId, userId, 'bill.payment_undone', {
+      await recordEvent(tx, householdId, userId, EventType.BILL_PAYMENT_UNDONE, {
         billId,
         paymentId,
         transactionId: reversedTxId,
@@ -1046,7 +1047,7 @@ export async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string | null,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

@@ -37,26 +37,36 @@ export class AuthService {
   async requestOtp(emailRaw: string): Promise<{ sent: true; expiresInSeconds: number }> {
     const email = emailRaw.trim().toLowerCase();
 
-    // Throttle: limit OTP requests per email per minute
-    const since = new Date(Date.now() - OTP_REQUEST_WINDOW_SECONDS * 1000);
-    const recent = await this.prisma.otpCode.count({
-      where: { email, createdAt: { gte: since } },
-    });
-    if (recent >= OTP_REQUEST_MAX_IN_WINDOW) throw Errors.authOtpThrottled();
-
     const code = randomOtp();
     const codeHash = hmacOtp(code);
+    const id = newId();
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+    const since = new Date(Date.now() - OTP_REQUEST_WINDOW_SECONDS * 1000);
 
-    await this.prisma.otpCode.create({
-      data: {
-        id: newId(),
-        email,
-        codeHash,
-        purpose: 'login',
-        expiresAt,
-      },
-    });
+    // Atomic check-then-insert: a single INSERT ... WHERE ... COUNT < N query
+    // eliminates the TOCTOU race that existed when count() and create() were
+    // two separate round-trips. Two concurrent requests for the same email both
+    // pass the count check in the non-atomic path; this form cannot.
+    const inserted = await this.prisma.$executeRaw`
+      INSERT INTO otp_codes (id, email, code_hash, purpose, expires_at, attempts, created_at, updated_at)
+      SELECT
+        ${id}::text,
+        ${email}::text,
+        ${codeHash}::text,
+        'login'::text,
+        ${expiresAt}::timestamptz,
+        0,
+        NOW(),
+        NOW()
+      WHERE (
+        SELECT COUNT(*) FROM otp_codes
+        WHERE email = ${email}::text
+          AND created_at >= ${since}::timestamptz
+      ) < ${OTP_REQUEST_MAX_IN_WINDOW}
+    `;
+
+    // inserted = 0 means the count guard blocked the insert.
+    if (inserted === 0) throw Errors.authOtpThrottled();
 
     await this.mail.sendOtp(email, code);
 
@@ -235,12 +245,26 @@ export class AuthService {
    * aud=security-reset, sub=userId, 5-minute expiry. Cannot be used as an
    * access token because the jwt-access strategy rejects `typ !== 'access'`.
    */
+  /**
+   * Returns the secret to use for security-reset OTP tokens.
+   * Uses `JWT_SECURITY_OTP_SECRET` if configured (recommended for production),
+   * falling back to `JWT_ACCESS_SECRET`. Both paths assert `aud=security-reset`
+   * and `typ=otp` on verify so cross-type token acceptance is prevented even
+   * when the same secret is shared.
+   */
+  private otpTokenSecret(): string {
+    return (
+      this.config.get<string>('JWT_SECURITY_OTP_SECRET') ??
+      this.config.getOrThrow<string>('JWT_ACCESS_SECRET')
+    );
+  }
+
   signOtpTokenForSecurity(userId: string): { token: string; expiresInSeconds: number } {
     const ttl = 300;
     const token = this.jwt.sign(
       { sub: userId, typ: 'otp', aud: 'security-reset' },
       {
-        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        secret: this.otpTokenSecret(),
         expiresIn: ttl,
       },
     );
@@ -255,8 +279,10 @@ export class AuthService {
   private verifyOtpTokenForSecuritySync(token: string): string {
     try {
       const payload = this.jwt.verify<{ sub: string; typ?: string; aud?: string }>(token, {
-        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        secret: this.otpTokenSecret(),
       });
+      // Explicitly assert both claims to prevent cross-type token acceptance
+      // even when JWT_SECURITY_OTP_SECRET is not set and secrets are shared.
       if (payload.typ !== 'otp' || payload.aud !== 'security-reset' || !payload.sub) {
         throw Errors.authTokenInvalid();
       }

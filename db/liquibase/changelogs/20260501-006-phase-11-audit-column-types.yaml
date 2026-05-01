@@ -1,0 +1,92 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-006-001-bill-payments-updated-by-type
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: "character varying(30)"
+            sql: >
+              SELECT data_type || '(' || character_maximum_length || ')'
+              FROM information_schema.columns
+              WHERE table_name = 'bill_payments'
+                AND column_name = 'updated_by'
+      changes:
+        - modifyDataType:
+            tableName: bill_payments
+            columnName: updated_by
+            columnDataType: VARCHAR(26)
+      rollback:
+        - modifyDataType:
+            tableName: bill_payments
+            columnName: updated_by
+            columnDataType: VARCHAR(30)
+
+  - changeSet:
+      id: 20260501-006-002-attachments-updated-by-type
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: "character varying(30)"
+            sql: >
+              SELECT data_type || '(' || character_maximum_length || ')'
+              FROM information_schema.columns
+              WHERE table_name = 'attachments'
+                AND column_name = 'updated_by'
+      changes:
+        - modifyDataType:
+            tableName: attachments
+            columnName: updated_by
+            columnDataType: VARCHAR(26)
+      rollback:
+        - modifyDataType:
+            tableName: attachments
+            columnName: updated_by
+            columnDataType: VARCHAR(30)
+
+  - changeSet:
+      id: 20260501-006-003-loan-lump-sums-created-by-type
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: "character varying(30)"
+            sql: >
+              SELECT data_type || '(' || character_maximum_length || ')'
+              FROM information_schema.columns
+              WHERE table_name = 'loan_lump_sums'
+                AND column_name = 'created_by'
+      changes:
+        - modifyDataType:
+            tableName: loan_lump_sums
+            columnName: created_by
+            columnDataType: VARCHAR(26)
+      rollback:
+        - modifyDataType:
+            tableName: loan_lump_sums
+            columnName: created_by
+            columnDataType: VARCHAR(30)
+
+  - changeSet:
+      id: 20260501-006-004-loan-lump-sums-updated-by-type
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: "character varying(30)"
+            sql: >
+              SELECT data_type || '(' || character_maximum_length || ')'
+              FROM information_schema.columns
+              WHERE table_name = 'loan_lump_sums'
+                AND column_name = 'updated_by'
+      changes:
+        - modifyDataType:
+            tableName: loan_lump_sums
+            columnName: updated_by
+            columnDataType: VARCHAR(26)
+      rollback:
+        - modifyDataType:
+            tableName: loan_lump_sums
+            columnName: updated_by
+            columnDataType: VARCHAR(30)

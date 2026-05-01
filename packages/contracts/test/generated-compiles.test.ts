@@ -53,7 +53,7 @@ describe('generated.ts — type-level shape', () => {
 
   it('keeps Money as integer minor units + ISO currency code', () => {
     expectTypeOf<ApiMoney>().toEqualTypeOf<{
-      amountMinor: number;
+      amountMinor: string;
       currencyCode: string;
     }>();
   });

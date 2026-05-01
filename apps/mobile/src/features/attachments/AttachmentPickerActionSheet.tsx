@@ -49,7 +49,8 @@ function basename(p: string): string {
 
 function localId(): string {
   // Not security-sensitive — just a reconcile key for the staged list.
-  return `staged-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // crypto.randomUUID() is available globally in Hermes (Expo SDK 49+).
+  return `staged-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 function normalizeMime(mime: string | undefined): AttachmentMime | null {

@@ -9,6 +9,7 @@ import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import type { TransactionDTO } from './transactions.dto';
+import { EventType } from '../common/event-types';
 
 const WRITE_ROLE = 'MEMBER' as const;
 
@@ -221,7 +222,7 @@ export class TransactionsService {
     const signed = input.type === 'INCOME' ? amount : -amount;
     await this.balance.applyDelta(tx, input.accountId, signed, occurredAt);
 
-    await recordEvent(tx, householdId, userId, 'transaction.created', {
+    await recordEvent(tx, householdId, userId, EventType.TRANSACTION_CREATED, {
       transactionId: row.id,
       accountId: row.accountId,
       categoryId: row.categoryId,
@@ -380,7 +381,7 @@ export class TransactionsService {
       const row = await tx.transaction.update({ where: { id }, data });
 
       if (changed.length > 0) {
-        await recordEvent(tx, householdId, userId, 'transaction.updated', {
+        await recordEvent(tx, householdId, userId, EventType.TRANSACTION_UPDATED, {
           transactionId: id,
           changedFields: changed,
           before,
@@ -420,7 +421,7 @@ export class TransactionsService {
         where: { id },
         data: { deletedAt: new Date(), updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId, userId, 'transaction.deleted', {
+      await recordEvent(tx, existing.householdId, userId, EventType.TRANSACTION_DELETED, {
         transactionId: id,
         accountId: existing.accountId,
         amountMinor: existing.amountMinor.toString(),
@@ -464,7 +465,7 @@ export class TransactionsService {
         where: { id },
         data: { deletedAt: null, updatedBy: userId },
       });
-      await recordEvent(tx, householdId, userId, 'transaction.restored', {
+      await recordEvent(tx, householdId, userId, EventType.TRANSACTION_RESTORED, {
         transactionId: id,
         accountId: existing.accountId,
         amountMinor: existing.amountMinor.toString(),
@@ -701,7 +702,7 @@ async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

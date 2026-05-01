@@ -11,6 +11,7 @@ import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import type { TransferDTO } from './transfers.dto';
+import { EventType } from '../common/event-types';
 
 const WRITE_ROLE = 'MEMBER' as const;
 const TERMINAL_ROLE = 'ADMIN' as const;
@@ -157,7 +158,7 @@ export class TransfersService {
       await this.balance.applyDelta(tx, firstAcct, firstDelta, occurredAt);
       await this.balance.applyDelta(tx, secondAcct, secondDelta, occurredAt);
 
-      await recordEvent(tx, householdId, userId, 'transfer.created', {
+      await recordEvent(tx, householdId, userId, EventType.TRANSFER_CREATED, {
         transferId,
         sourceAccountId: input.sourceAccountId,
         destinationAccountId: input.destinationAccountId,
@@ -234,7 +235,7 @@ export class TransfersService {
         where: { householdId, transferId: id },
       });
 
-      await recordEvent(tx, householdId, userId, 'transfer.deleted', {
+      await recordEvent(tx, householdId, userId, EventType.TRANSFER_DELETED, {
         transferId: id,
         sourceAccountId: existing.sourceAccountId,
         destinationAccountId: existing.destinationAccountId,
@@ -294,7 +295,7 @@ export class TransfersService {
         where: { householdId, transferId: id },
       });
 
-      await recordEvent(tx, householdId, userId, 'transfer.restored', {
+      await recordEvent(tx, householdId, userId, EventType.TRANSFER_RESTORED, {
         transferId: id,
         sourceAccountId: existing.sourceAccountId,
         destinationAccountId: existing.destinationAccountId,
@@ -375,7 +376,7 @@ async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

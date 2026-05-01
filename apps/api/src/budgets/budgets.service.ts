@@ -12,6 +12,7 @@ import {
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import { isSupportedCurrency } from '../common/currencies';
 import { PushNotificationsService } from '../bills/push-notifications.service';
+import { EventType } from '../common/event-types';
 import {
   currentPeriodEnd,
   currentPeriodStart,
@@ -185,7 +186,7 @@ export class BudgetsService {
           },
         });
 
-        await recordEvent(tx, householdId, userId, 'budget.created', {
+        await recordEvent(tx, householdId, userId, EventType.BUDGET_CREATED, {
           budgetId: created.id,
           scope: created.scope,
           categoryId: created.categoryId,
@@ -311,7 +312,7 @@ export class BudgetsService {
       const row = await tx.budget.update({ where: { id }, data });
 
       if (changed.length > 0) {
-        await recordEvent(tx, householdId, userId, 'budget.updated', {
+        await recordEvent(tx, householdId, userId, EventType.BUDGET_UPDATED, {
           budgetId: id,
           changedFields: changed,
           before,
@@ -346,7 +347,7 @@ export class BudgetsService {
         where: { id },
         data: { archivedAt: new Date(), updatedBy: userId },
       });
-      await recordEvent(tx, householdId, userId, 'budget.archived', {
+      await recordEvent(tx, householdId, userId, EventType.BUDGET_ARCHIVED, {
         budgetId: id,
       });
       return row;
@@ -371,7 +372,7 @@ export class BudgetsService {
           where: { id },
           data: { archivedAt: null, updatedBy: userId },
         });
-        await recordEvent(tx, householdId, userId, 'budget.restored', {
+        await recordEvent(tx, householdId, userId, EventType.BUDGET_RESTORED, {
           budgetId: id,
         });
         return row;
@@ -399,7 +400,7 @@ export class BudgetsService {
         where: { id },
         data: { status: 'PAUSED', updatedBy: userId },
       });
-      await recordEvent(tx, householdId, userId, 'budget.paused', {
+      await recordEvent(tx, householdId, userId, EventType.BUDGET_PAUSED, {
         budgetId: id,
       });
       return row;
@@ -423,7 +424,7 @@ export class BudgetsService {
         where: { id },
         data: { status: 'ACTIVE', updatedBy: userId },
       });
-      await recordEvent(tx, householdId, userId, 'budget.resumed', {
+      await recordEvent(tx, householdId, userId, EventType.BUDGET_RESUMED, {
         budgetId: id,
       });
       const pushes = await this.evaluateBudgetThresholds(tx, row, userId, new Date());
@@ -478,7 +479,7 @@ export class BudgetsService {
           }),
         ),
       );
-      await recordEvent(tx, householdId, userId, 'budget.reordered', {
+      await recordEvent(tx, householdId, userId, EventType.BUDGET_REORDERED, {
         order: finalOrder,
       });
       return tx.budget.findMany({
@@ -808,7 +809,7 @@ export class BudgetsService {
         data: { archivedAt: now, updatedBy: actorUserId ?? b.id },
       });
       archivedIds.push(b.id);
-      await recordEvent(tx, householdId, null, 'budget.auto_archived', {
+      await recordEvent(tx, householdId, null, EventType.BUDGET_AUTO_ARCHIVED, {
         budgetId: b.id,
         reason: 'CATEGORY_ARCHIVED',
         categoryId,
@@ -953,7 +954,7 @@ export class BudgetsService {
         tx,
         budget.householdId,
         actorUserId,
-        'budget.threshold_fired',
+        EventType.BUDGET_THRESHOLD_FIRED,
         {
           budgetId: budget.id,
           periodStart: result.periodStart.toISOString(),
@@ -1105,7 +1106,7 @@ export async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string | null,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

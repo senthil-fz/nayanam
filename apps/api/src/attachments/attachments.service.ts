@@ -8,6 +8,7 @@ import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import { recordEvent } from '../bills/bills.service';
+import { EventType } from '../common/event-types';
 import {
   ATTACHMENT_MIME_ALLOWLIST,
   ATTACHMENT_SIZE_CAPS,
@@ -216,7 +217,7 @@ export class AttachmentsService {
           { attachmentId: next.id },
         );
       }
-      await recordEvent(tx, householdId, userId, 'attachment.uploaded', {
+      await recordEvent(tx, householdId, userId, EventType.ATTACHMENT_UPLOADED, {
         attachmentId: next.id,
         ownerType: next.ownerType,
         ownerId: next.ownerId,
@@ -303,7 +304,7 @@ export class AttachmentsService {
         where: { id: row.id },
         data: { deletedAt: new Date(), updatedAt: new Date() },
       });
-      await recordEvent(tx, householdId, userId, 'attachment.deleted', {
+      await recordEvent(tx, householdId, userId, EventType.ATTACHMENT_DELETED, {
         attachmentId: row.id,
         ownerType: row.ownerType,
         ownerId: row.ownerId,
@@ -334,7 +335,7 @@ export class AttachmentsService {
         where: { id: row.id },
         data: { deletedAt: null, updatedAt: new Date() },
       });
-      await recordEvent(tx, householdId, userId, 'attachment.restored', {
+      await recordEvent(tx, householdId, userId, EventType.ATTACHMENT_RESTORED, {
         attachmentId: row.id,
         householdId,
       });

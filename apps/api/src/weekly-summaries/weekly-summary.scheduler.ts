@@ -5,7 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { newId } from '../common/ids';
 import { WeeklySummariesService } from './weekly-summaries.service';
-import { requestContext } from '../common/context';
 
 /**
  * Sunday 14:00 UTC per spec §6. Advisory lock 0xDEBBA9 guards against
@@ -86,23 +85,21 @@ export class WeeklySummaryScheduler {
             // Fan-out: emit one `user.weekly_summary_sent` event per household
             // the user belongs to, so the activity log isn't mis-attributed to
             // a single arbitrary household. System event — actor_id = NULL.
+            // Note: requestContext.run has no effect on $executeRaw calls (raw
+            // SQL bypasses the Prisma extension layer), so we pass the
+            // household_id directly in the SQL values instead.
             const memberships = await tx.householdMember.findMany({
               where: { userId: c.user_id },
               select: { householdId: true },
             });
             for (const m of memberships) {
-              await requestContext.run(
-                { householdId: m.householdId },
-                async () => {
-                  await tx.$executeRaw`
-                    INSERT INTO events (id, household_id, actor_id, type, payload)
-                    VALUES (
-                      ${newId()}, ${m.householdId}, NULL, ${EventType.USER_WEEKLY_SUMMARY_SENT},
-                      ${JSON.stringify({ userId: c.user_id, weekEndAt: weekEnd.toISOString(), transactionCount: total })}::jsonb
-                    )
-                  `;
-                },
-              );
+              await tx.$executeRaw`
+                INSERT INTO events (id, household_id, actor_id, type, payload)
+                VALUES (
+                  ${newId()}, ${m.householdId}, NULL, ${EventType.USER_WEEKLY_SUMMARY_SENT},
+                  ${JSON.stringify({ userId: c.user_id, weekEndAt: weekEnd.toISOString(), transactionCount: total })}::jsonb
+                )
+              `;
             }
             sent += 1;
           } catch (err: unknown) {

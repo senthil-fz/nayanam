@@ -355,16 +355,6 @@ export const Errors = {
       HttpStatus.TOO_MANY_REQUESTS,
       { retryAfterSeconds },
     ),
-  otpInvalid: () =>
-    new AppError('OTP_INVALID', 'Invalid one-time code.', HttpStatus.BAD_REQUEST),
-  otpExpired: () =>
-    new AppError('OTP_EXPIRED', 'One-time code has expired.', HttpStatus.BAD_REQUEST),
-  otpMaxAttempts: () =>
-    new AppError(
-      'OTP_MAX_ATTEMPTS',
-      'Too many incorrect attempts. Request a new code.',
-      HttpStatus.BAD_REQUEST,
-    ),
   householdLastOwner: (details?: Record<string, unknown>) =>
     new AppError(
       'HOUSEHOLD_LAST_OWNER',
@@ -398,7 +388,7 @@ export const Errors = {
     new AppError(
       'PIN_LOCKED',
       'PIN entry is temporarily locked after too many failed attempts.',
-      HttpStatus.LOCKED,
+      HttpStatus.TOO_MANY_REQUESTS,
       { retryAfterSeconds },
     ),
   // --- Loans (Phase 10) ---

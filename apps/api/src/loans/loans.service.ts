@@ -15,6 +15,7 @@ import {
 } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import { recordEvent } from '../bills/bills.service';
+import { EventType } from '../common/event-types';
 import type {
   LoanDTO,
   LoanLumpSumDTO,
@@ -295,7 +296,7 @@ export class LoansService {
           lumpRows.push(lsRow);
         }
 
-        await recordEvent(tx, householdId, userId, 'loan.created', {
+        await recordEvent(tx, householdId, userId, EventType.LOAN_CREATED, {
           loanId: created.id,
           name: created.name,
           principalMinor: created.principalMinor.toString(),
@@ -497,7 +498,7 @@ export class LoansService {
         }
 
         if (changed.length > 0) {
-          await recordEvent(tx, householdId, userId, 'loan.updated', {
+          await recordEvent(tx, householdId, userId, EventType.LOAN_UPDATED, {
             loanId: id,
             changedFields: changed,
           });
@@ -543,7 +544,7 @@ export class LoansService {
             updatedBy: userId,
           },
         });
-        await recordEvent(tx, householdId, userId, 'loan.deleted', {
+        await recordEvent(tx, householdId, userId, EventType.LOAN_DELETED, {
           loanId: id,
           name: existing.name,
         });
@@ -567,7 +568,7 @@ export class LoansService {
           updatedBy: userId,
         },
       });
-      await recordEvent(tx, householdId, userId, 'loan.archived', {
+      await recordEvent(tx, householdId, userId, EventType.LOAN_ARCHIVED, {
         loanId: id,
         name: existing.name,
       });
@@ -618,7 +619,7 @@ export class LoansService {
             updatedBy: userId,
           },
         });
-        await recordEvent(tx, householdId, userId, 'loan.restored', {
+        await recordEvent(tx, householdId, userId, EventType.LOAN_RESTORED, {
           loanId: id,
           name: row.name,
           status: row.status,
@@ -681,7 +682,7 @@ export class LoansService {
           }),
         ),
       );
-      await recordEvent(tx, householdId, userId, 'loan.reordered', {
+      await recordEvent(tx, householdId, userId, EventType.LOAN_REORDERED, {
         order: finalOrder.map((id, idx) => ({ loanId: id, displayOrder: idx })),
       });
       return tx.loan.findMany({

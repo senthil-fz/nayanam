@@ -49,6 +49,7 @@ export class HouseholdsController {
 
   @Patch(':id')
   @UseGuards(HouseholdMemberGuard)
+  @UseInterceptors(IdempotencyInterceptor)
   update(@CurrentUser() ctx: AuthContext, @Param('id') id: string, @Body() body: HouseholdUpdateDto) {
     return this.svc.update(ctx.userId, id, body);
   }

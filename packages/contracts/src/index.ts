@@ -14,7 +14,7 @@ export type ApiErrorShape = {
   details?: Record<string, unknown>;
 };
 
-export type ApiMoney = { amountMinor: number; currencyCode: string };
+export type ApiMoney = { amountMinor: string; currencyCode: string };
 
 export type ApiUser = ApiSchemas['User'];
 export type ApiMe = ApiSchemas['Me'];

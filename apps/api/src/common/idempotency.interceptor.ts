@@ -206,7 +206,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
               .delete({ where: { userId_key: { userId, key } } })
               .catch((deleteErr: unknown) => {
                 this.logger.error(
-                  `idempotency placeholder cleanup failed for user=${userId} key=${key}: ${stringifyErr(deleteErr)}`,
+                  `idempotency placeholder cleanup failed for user=...${userId.slice(-4)} key=${key}: ${stringifyErr(deleteErr)}`,
                 );
               });
             throw err;

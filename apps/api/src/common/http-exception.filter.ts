@@ -4,8 +4,11 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Inject,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ZodValidationException } from 'nestjs-zod';
 import { ZodError } from 'zod';
 import type { Request, Response } from 'express';
@@ -21,6 +24,11 @@ type ErrorBody = {
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
+  private readonly isProd: boolean;
+
+  constructor(@Optional() @Inject(ConfigService) config?: ConfigService) {
+    this.isProd = config?.get<string>('NODE_ENV') === 'production';
+  }
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -36,7 +44,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Zod validation exceptions — emit VALIDATION_ERROR with flattened details.
     if (exception instanceof ZodValidationException) {
-      status = HttpStatus.BAD_REQUEST;
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
       body = {
         error: {
           code: 'VALIDATION_ERROR',
@@ -80,9 +88,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         {
           correlationId,
           msg: exception.message,
-          ...(process.env.NODE_ENV !== 'production' && {
-            stack: exception.stack,
-          }),
+          ...(!this.isProd && { stack: exception.stack }),
         },
         `[${correlationId}] ${exception.message}`,
       );

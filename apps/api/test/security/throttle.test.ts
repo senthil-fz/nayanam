@@ -38,10 +38,11 @@ describe('throttle — POST /api/v1/auth/otp/request', () => {
       configure: (b) =>
         b.overrideProvider(MailService).useValue({
           sendOtp: async () => {},
+          sendInvite: async () => {},
           sendEmailChangeOtp: async () => {},
-          sendEmailChangeNotice: async () => {},
-          sendWeeklySummary: async () => {},
-        }),
+          sendEmailChangedNotice: async () => {},
+          sendGeneric: async () => {},
+        } satisfies Partial<MailService>),
     });
   });
 

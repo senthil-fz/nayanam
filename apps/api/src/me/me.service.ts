@@ -118,6 +118,7 @@ export class MeService {
       SELECT id FROM attachments
        WHERE owner_type = 'household'
          AND owner_id = ${householdId}
+         AND household_id = ${householdId}
          AND status = 'READY'
          AND deleted_at IS NULL
        ORDER BY created_at DESC
@@ -186,12 +187,14 @@ export async function recordUserEvent(
   client: Prisma.TransactionClient | PrismaService,
   userId: string,
   householdId: string | null,
-  type: string,
+  type: EventType,
   payload: unknown,
 ): Promise<void> {
   // Events table requires a non-null household_id. For user-scoped events
   // lacking a household context, we pick any one the user belongs to so the
   // row has a valid FK; scheduler-originated events pass null households.
+  // TODO: For users in multiple households, emit one event per membership to
+  // ensure consistent activity-feed coverage across all households.
   let hid = householdId;
   if (!hid) {
     const m = await client.householdMember.findFirst({ where: { userId } });

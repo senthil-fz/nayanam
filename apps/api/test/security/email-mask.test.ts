@@ -28,4 +28,20 @@ describe('maskEmail', () => {
   it.each(invalid)('collapses %s to ***', (_label, input) => {
     expect(maskEmail(input)).toBe('***');
   });
+
+  // Edge cases: document behavior for subdomains and multi-part TLDs.
+  // The implementation uses `lastIndexOf('.')` on the domain portion, so the
+  // TLD is the segment after the final dot. These tests document and pin the
+  // actual behavior (not necessarily ideal, but at least consistent).
+  it('multi-subdomain: uses last dot to split TLD', () => {
+    // domain='mail.example.com' → lastIndexOf('.')=11 →
+    // domainLabel='mail.example', tld='com' → 'm***'
+    expect(maskEmail('user@mail.example.com')).toBe('u***@m***.com');
+  });
+
+  it('multi-part TLD: preserves only the final segment as TLD', () => {
+    // domain='example.co.uk' → lastIndexOf('.')=10 →
+    // domainLabel='example.co', tld='uk' → 'e***'
+    expect(maskEmail('user@example.co.uk')).toBe('u***@e***.uk');
+  });
 });

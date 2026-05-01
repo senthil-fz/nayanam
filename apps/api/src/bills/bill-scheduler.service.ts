@@ -7,6 +7,7 @@ import { BillsService, recordEvent } from './bills.service';
 import { PushNotificationsService } from './push-notifications.service';
 import { newId } from '../common/ids';
 import { requestContext } from '../common/context';
+import { EventType } from '../common/event-types';
 
 /**
  * Daily 03:00 UTC scheduler — the first time-driven system task in Nayanam.
@@ -142,7 +143,7 @@ export class BillSchedulerService {
           where: { id: r.id },
           data: { status: 'PAUSED' },
         });
-        await recordEvent(tx, r.household_id, null, 'bill.ended', {
+        await recordEvent(tx, r.household_id, null, EventType.BILL_ENDED, {
           billId: r.id,
           endAt: r.end_at?.toISOString() ?? null,
         });
@@ -157,13 +158,13 @@ export class BillSchedulerService {
           where: { id: r.id },
           data: { status: 'PAUSED' },
         });
-        await recordEvent(tx, r.household_id, null, 'bill.auto_paused', {
+        await recordEvent(tx, r.household_id, null, EventType.BILL_AUTO_PAUSED, {
           billId: r.id,
           reason: 'account_archived',
           accountId: r.account_id,
         });
       });
-      await this.notifyHouseholdMembers(r.household_id, 'bill.auto_paused', {
+      await this.notifyHouseholdMembers(r.household_id, EventType.BILL_AUTO_PAUSED, {
         billId: r.id,
         reason: 'account_archived',
       });
@@ -196,7 +197,7 @@ export class BillSchedulerService {
         );
       }
       // Notify household members that auto-log fired.
-      await this.notifyHouseholdMembers(r.household_id, 'bill.auto_logged', {
+      await this.notifyHouseholdMembers(r.household_id, EventType.BILL_AUTO_LOGGED, {
         billId: r.id,
       });
       return;
@@ -207,13 +208,13 @@ export class BillSchedulerService {
     const dayMs = 86_400_000;
 
     if (msUntilDue > 0 && msUntilDue <= 3 * dayMs && r.last_notified_due_soon_at === null) {
-      await this.emitNotification(r, now, 'bill.due_soon');
+      await this.emitNotification(r, now, EventType.BILL_DUE_SOON);
       return;
     }
 
     // 5. Overdue notification (> 1 day past due).
     if (msUntilDue < -dayMs && r.last_notified_overdue_at === null) {
-      await this.emitNotification(r, now, 'bill.overdue');
+      await this.emitNotification(r, now, EventType.BILL_OVERDUE);
       return;
     }
   }
@@ -258,7 +259,7 @@ export class BillSchedulerService {
       name: string;
     },
     now: Date,
-    type: 'bill.due_soon' | 'bill.overdue',
+    type: typeof EventType.BILL_DUE_SOON | typeof EventType.BILL_OVERDUE,
   ): Promise<void> {
     // Write one notifications row per household member + set the dedupe cursor.
     const members = await this.prisma.householdMember.findMany({
@@ -292,7 +293,7 @@ export class BillSchedulerService {
       await tx.bill.update({
         where: { id: r.id },
         data:
-          type === 'bill.due_soon'
+          type === EventType.BILL_DUE_SOON
             ? { lastNotifiedDueSoonAt: now }
             : { lastNotifiedOverdueAt: now },
       });
@@ -306,7 +307,7 @@ export class BillSchedulerService {
     });
 
     const title =
-      type === 'bill.due_soon'
+      type === EventType.BILL_DUE_SOON
         ? `Bill due soon: ${r.name}`
         : `Bill overdue: ${r.name}`;
     const body = pushBodyFor(type, r.next_due_at, now, r.amount_minor, r.currency_code);
@@ -330,7 +331,7 @@ export class BillSchedulerService {
 
   private async notifyHouseholdMembers(
     householdId: string,
-    type: string,
+    type: EventType,
     payload: Record<string, unknown>,
   ): Promise<void> {
     const members = await this.prisma.householdMember.findMany({
@@ -354,7 +355,7 @@ export class BillSchedulerService {
 }
 
 function pushBodyFor(
-  type: 'bill.due_soon' | 'bill.overdue',
+  type: typeof EventType.BILL_DUE_SOON | typeof EventType.BILL_OVERDUE,
   dueAt: Date,
   now: Date,
   amountMinor: bigint,
@@ -366,7 +367,7 @@ function pushBodyFor(
   const amount = formatAmount(amountMinor, currencyCode);
   const dayMs = 86_400_000;
   const ms = dueAt.getTime() - now.getTime();
-  if (type === 'bill.due_soon') {
+  if (type === EventType.BILL_DUE_SOON) {
     const days = Math.max(0, Math.ceil(ms / dayMs));
     if (days === 0) return `${amount} due today`;
     if (days === 1) return `${amount} due in 1 day`;

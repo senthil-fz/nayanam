@@ -59,6 +59,8 @@ describe('apiClient — Idempotency-Key forwarding', () => {
   let client: ApiClient;
   let calls: CapturedCall[];
   let fetchSpy: MockInstance<typeof fetch>;
+  // Deterministic counter so test keys are stable (no Math.random() non-determinism).
+  let keyCounter = 0;
 
   beforeEach(() => {
     calls = [];
@@ -105,7 +107,7 @@ describe('apiClient — Idempotency-Key forwarding', () => {
     ).toBeUndefined();
 
     calls.length = 0;
-    const key = `idem-${label}-${Math.random().toString(36).slice(2, 10)}`;
+    const key = `idem-${label}-${++keyCounter}`;
     await invokeWithKey(key);
     expect(calls, `${label}: keyed call did not reach fetch`).toHaveLength(1);
     const keyed = calls[0]!;

@@ -40,6 +40,7 @@
     "react": ">=19.0.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
     "react": "^19.2.5",
     "typescript": "^6.0.3",
     "vite-tsconfig-paths": "^5.1.4",

@@ -66,3 +66,36 @@ Current state: ThrottlerModule uses in-memory storage. In multi-pod deployment e
 Decision: Deferred to Phase 12. Current deployment is single-pod. When multi-pod deployment is introduced, switch ThrottlerStorageRedisService.
 
 Owner: Lead. Target: Phase 12 infra task.
+
+---
+
+## TODO: Fix 6 — `recordUserEvent` silent drop for householdless users (OPEN QUESTION)
+
+**Context:** `EventsService.recordUserEvent` (or equivalent path in notifications/activity feed) silently drops events when `householdId` is not available in the request context (e.g. during auth flows or invite-accept before a household is resolved). No error is raised; the event is lost.
+
+**Open question:** What is the correct recovery semantics?
+- Option A: Accept the data gap with a structured `logger.warn` tagged with `correlationId` and `userId`. Document that pre-household events (auth flow, first-login) are intentionally not captured in the activity feed.
+- Option B: Write events to an outbox table with `householdId = NULL` allowed; a background processor retries or routes them once the household context is established. Adds schema complexity (nullable FK) and a reconciliation scheduler.
+- Option C: Introduce a `system` household (sentinel row) that captures householdless events, queryable only by super-admins.
+
+**Recommendation:** Option A (structured warning + documented gap) for Phase 12. The activity feed is household-scoped and pre-household events have no meaningful display context. Option B should be revisited when an audit log for auth events is productized.
+
+**Owner:** Lead (product decision required before implementation).
+**Target:** Phase 12 activity-log hardening task.
+
+---
+
+## TODO: Fix 9 — Web/mobile component unit test backlog (SCOPE ESTIMATE)
+
+**Context:** The Phase 11 Jarvis review identified a backlog of approximately 40 React/React Native components and hooks across `apps/web` and `apps/mobile` that lack unit tests (React Testing Library for web; Vitest for hooks/stores on mobile).
+
+**Scope estimate:** ~40 components/hooks; estimate 2–3 tests each = ~80–120 test cases. Rough budget: 3–5 engineering days for a testing-baseline sweep.
+
+**Recommendation:** Allocate as a dedicated "Phase 12 testing-baseline sweep" task. Prioritize:
+1. Authentication flows (OTP request/verify, refresh)
+2. Household management screens
+3. Money-displaying components (amount formatting, currency edge cases)
+4. Query hooks with error/loading states
+
+**Owner:** Lead. Spawn frontend-react + mobile-expo teammates with explicit test-writing brief.
+**Target:** Phase 12 testing-baseline sweep.

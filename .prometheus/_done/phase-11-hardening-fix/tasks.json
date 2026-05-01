@@ -3,10 +3,14 @@
     "slug": "phase-11-hardening-fix",
     "title": "Phase 11 Hardening — Fix sweep",
     "mode": "fix",
-    "phase": "dispatch",
+    "phase": "ship",
     "createdAt": "2026-05-01T00:00:00Z",
-    "updatedAt": "2026-05-01T11:36:00Z",
-    "startCommit": "7538c5cb95bed851ffae83bf690566edbe0011d8"
+    "updatedAt": "2026-05-01T14:30:00Z",
+    "startCommit": "7538c5cb95bed851ffae83bf690566edbe0011d8",
+    "reviewResult": "CLEAN",
+    "reviewIterations": 2,
+    "notes": "Phase 11 hardening fix sweep + Phase 11b cleanup complete. 23/23 BLOCKERs resolved (over 2 fix sweeps). 39/41 MAJORs resolved. 2 MAJORs explicitly deferred to Phase 12 (recordUserEvent silent drop product decision; web/mobile component test backlog). Typecheck green across all workspaces.",
+    "cleanupSweeps": 2
   },
   "gates": {
     "contract": true,
@@ -420,7 +424,7 @@
       "title": "Deferred cleanup: batch MINORs and SUGGESTIONs from Phase 11 review",
       "type": "api",
       "assignee": "backend-nest",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "task-001",
         "task-002",

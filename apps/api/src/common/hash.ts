@@ -21,6 +21,25 @@ export function randomOtp(): string {
   return n.toString().padStart(6, '0');
 }
 
+/**
+ * Direct `process.env` read — intentionally NOT using ConfigService here.
+ *
+ * Rationale:
+ *   1. `config/env.schema.ts` is wired into `ConfigModule.forRoot({ validate })`
+ *      and runs at process boot. It rejects a missing or short value before
+ *      any request is processed, so the value is guaranteed present by the time
+ *      any HMAC helper is called.
+ *   2. These four vars are static secrets that never change after boot; they do
+ *      not need ConfigService's live-reload semantics.
+ *   3. `hash.ts` deliberately has no NestJS imports so it can be used in unit
+ *      tests and CLI tools without bootstrapping the DI container. Injecting
+ *      ConfigService would force a DI context on every test callsite.
+ *
+ * If you need to add a new HMAC helper that reads a secret, add the var to
+ * `env.schema.ts` (ensures boot-time validation) then add it to the union type
+ * below — do NOT add a raw `process.env[X]` read elsewhere without the schema
+ * guard.
+ */
 function requireEnv(name: 'OTP_PEPPER' | 'REFRESH_PEPPER' | 'SESSION_SALT' | 'INVITE_PEPPER'): string {
   // Boot-time env validation (config/env.schema.ts) guarantees presence; this
   // throw is a defensive backstop rather than a runtime contract.

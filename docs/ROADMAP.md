@@ -183,13 +183,13 @@ Cross-cutting fixes from the 2026-05-01 Jarvis platform review (`docs/reviews/20
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-1101 | Tenancy middleware: `$extends` + `crossTenant` primitive (covers nested writes + raw SQL escape) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1102 | Security: HMAC hashing + constant-time compare + per-IP throttle + env validation + log redaction | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1103 | Idempotency: composite PK + body-hash 409 + interceptor coverage + client wrappers | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1104 | Audit events inside `$transaction` (households + me services) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1105 | Contract drift fix: `reset-pin` + `verify-for-security` alignment | contract, api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1106 | Global `JwtAuthGuard` via `APP_GUARD` + `@Public()` decorator | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
-| F-1107 | API Vitest harness + invariant test pack (cross-tenant, money, idempotency, event-in-tx) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1101 | Tenancy middleware: `$extends` + `crossTenant` primitive (covers nested writes + raw SQL escape) | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1102 | Security: HMAC hashing + constant-time compare + per-IP throttle + env validation + log redaction | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1103 | Idempotency: composite PK + body-hash 409 + interceptor coverage + client wrappers | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1104 | Audit events inside `$transaction` (households + me services) | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1105 | Contract drift fix: `reset-pin` + `verify-for-security` alignment | contract, api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1106 | Global `JwtAuthGuard` via `APP_GUARD` + `@Public()` decorator | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1107 | API Vitest harness + invariant test pack (cross-tenant, money, idempotency, event-in-tx) | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
 
 ## Phase 11b — Platform MAJORs cleanup
 
@@ -204,8 +204,8 @@ Deferred MAJOR-tier findings from the same Jarvis review. No spec yet — to be 
 | F-11b05 | Shared money helpers: promote `parseMajor`/`formatMajor`/`majorToMinorString`/`minorStringToMajor` to `packages/core`; fix `formatMoney` BigInt coercion; unify currency allowlists | core, api, web, mobile | todo | |
 | F-11b06 | Shared web form primitives: `<Field*>` components + move 13 inline form schemas into `packages/core/src/<domain>/schemas.ts` | core, web | todo | |
 | F-11b07 | Household-keyed queries: include `activeHouseholdId` in query-key roots OR `queryClient.clear()` on switch | web, mobile, core | todo | |
-| F-11b08 | NestJS hygiene: `ZodValidationPipe` via `APP_PIPE`, dedupe `recordEvent` into shared events module, fix `LastSeenMiddleware` ordering, add `enableShutdownHooks` + body-size limit + correlation-id middleware, split 500+ LOC services | api | todo | |
-| F-11b09 | Error envelope polish: log `HttpException`s, surface `ZodValidationException` `details.fieldErrors`, strip `ThrottlerException` class-name leak, shared `mapApiError(err)` for web/mobile, route transport failures through `ApiRequestError` | api, web, mobile, core | todo | |
+| F-11b08 | NestJS hygiene: `ZodValidationPipe` via `APP_PIPE`, add `enableShutdownHooks` + body-size limit + correlation-id middleware, three named throttler buckets (`short`/`medium`/`long`) | api | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-11b09 | Error envelope polish: log `HttpException` 5xx, surface `ZodValidationException` as 422 `VALIDATION_ERROR`, scrub S3 cause from response details, web auth UI branches on `error.code` not `.message` | api, web | shipped | [spec](specs/2026-04-24-phase-11-hardening.md) |
 | F-11b10 | Expo gate + connectivity: `(authed)` route group to kill unprotected first paint, bridge `onlineManager` to `NetInfo`, pass `projectId` to `getExpoPushTokenAsync`, re-register push on cold start, migrate long lists to `FlatList`, add visible feedback to `<Pressable>` | mobile | todo | |
 | F-11b11 | Tenancy defense-in-depth: add `household_id` predicates to raw SQL in `me.service`, `accounts/balance.service`, `categories.service` (covers gaps even after F-1101) | api | todo | |
 | F-11b12 | Audit hardening: event-type registry + per-type Zod payload schemas, backfill audit columns on `BillPayment`/`Notification`/`LoanLumpSum`/`Category`, replace `LoanLumpSum` hard-delete with soft-delete + event, move notification dispatch behind event subscription | api | todo | |

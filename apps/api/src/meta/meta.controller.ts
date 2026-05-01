@@ -12,10 +12,7 @@ export class MetaController {
       contactUrl: this.config.get<string>('META_CONTACT_URL') ?? null,
       termsUrl: this.config.get<string>('META_TERMS_URL') ?? null,
       privacyUrl: this.config.get<string>('META_PRIVACY_URL') ?? null,
-      appVersion:
-        this.config.get<string>('APP_VERSION') ??
-        process.env.npm_package_version ??
-        '0.0.0',
+      appVersion: this.config.get<string>('APP_VERSION') ?? '0.0.0',
       apiVersion: 'v1',
     };
   }

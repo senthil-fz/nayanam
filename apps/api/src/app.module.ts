@@ -71,9 +71,16 @@ import { validateEnv } from './config/env.schema';
         },
       }),
     }),
-    ThrottlerModule.forRoot([
-      { name: 'ip', limit: 60, ttl: 60_000 },
-    ]),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        // short — 5 req / 10 sec: auth and other sensitive ops (override with @Throttle({ short: ... }))
+        { name: 'short', limit: 5, ttl: 10_000 },
+        // medium — 30 req / 60 sec: most mutations
+        { name: 'medium', limit: 30, ttl: 60_000 },
+        // long — 120 req / 1 hr: guard against slow-drip enumeration
+        { name: 'long', limit: 120, ttl: 3_600_000 },
+      ],
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     StorageModule,

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import {
   hmacOtp,
@@ -127,6 +127,4 @@ describe('timingSafeEqualHex', () => {
   });
 
   // No global env mutation here; nothing to clean up.
-  beforeEach(() => {});
-  afterEach(() => {});
 });

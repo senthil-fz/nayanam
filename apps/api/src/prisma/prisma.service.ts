@@ -58,6 +58,12 @@ export const HOUSEHOLD_NULLABLE_TENANT_MODELS = new Set<string>([
   'Category',
 ]);
 
+// Models intentionally excluded from soft-delete (hard-deleted by design):
+// - HouseholdMember: membership mapping; cascade-deleted when household is archived
+// - HouseholdInvite: consumed one-time tokens; expired ones are purged
+// - OtpCode: consumed one-time tokens
+// - WeeklySummarySend: idempotency log, no restore needed
+
 /**
  * Models that use soft-delete via `deletedAt`. Reads default-filter to
  * `deletedAt IS NULL` unless the caller explicitly references `deletedAt`
@@ -75,6 +81,7 @@ export const SOFT_DELETE_MODELS = new Set<string>([
   'Attachment',
   'Notification',
   'Loan',
+  'LoanLumpSum',
 ]);
 
 /** Read ops where `args.where` should be scope-AND-injected. */

@@ -3,6 +3,9 @@
  *
  * API services import from here (not directly from @nayanam/core) so that the
  * NestJS CJS build does not trip over the ESM package boundary.
+ *
+ * TODO: Add per-event-type Zod payload schemas for compile-time validation.
+ * Currently payloads are untyped JSON.
  */
 
 export const EventType = {

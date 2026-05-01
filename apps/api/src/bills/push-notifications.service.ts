@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -28,9 +29,12 @@ export class PushNotificationsService {
   private readonly logger = new Logger(PushNotificationsService.name);
   private readonly expo: Expo;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {
     this.expo = new Expo({
-      accessToken: process.env.EXPO_ACCESS_TOKEN,
+      accessToken: this.config.get<string>('EXPO_ACCESS_TOKEN'),
       useFcmV1: true,
     });
   }

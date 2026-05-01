@@ -164,7 +164,7 @@ export class SecurityService {
           updatedAt: new Date(),
         },
       });
-      await recordUserEvent(tx, userId, null, 'user.security_updated', {
+      await recordUserEvent(tx, userId, null, EventType.USER_SECURITY_UPDATED, {
         flags: { pinSet: true, reason: 'reset' },
       });
     });
@@ -185,16 +185,23 @@ export class SecurityService {
   ): Promise<boolean> {
     const ok = await argon2.verify(hash, candidate);
     if (!ok) {
-      const row = await this.prisma.userSecurity.update({
-        where: { userId },
-        data: { pinFailedAttempts: { increment: 1 }, updatedAt: new Date() },
-      });
-      if (row.pinFailedAttempts >= MAX_FAILED) {
-        await this.prisma.userSecurity.update({
+      // Single atomic transaction: increment attempts AND conditionally set
+      // pinLockedUntil based on the new count. Eliminates the race condition
+      // where two concurrent requests both increment to MAX_FAILED but only
+      // one sets the lockout.
+      await this.prisma.$transaction(async (tx) => {
+        const row = await tx.userSecurity.update({
           where: { userId },
-          data: { pinLockedUntil: new Date(Date.now() + LOCKOUT_MS), updatedAt: new Date() },
+          data: { pinFailedAttempts: { increment: 1 }, updatedAt: new Date() },
+          select: { pinFailedAttempts: true },
         });
-      }
+        if (row.pinFailedAttempts >= MAX_FAILED) {
+          await tx.userSecurity.update({
+            where: { userId },
+            data: { pinLockedUntil: new Date(Date.now() + LOCKOUT_MS), updatedAt: new Date() },
+          });
+        }
+      });
       return false;
     }
     return true;

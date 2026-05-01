@@ -7,6 +7,7 @@ import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import type { CategoryDTO } from './categories.dto';
+import { EventType } from '../common/event-types';
 
 const WRITE_ROLE = 'MEMBER' as const;
 const TERMINAL_ROLE = 'ADMIN' as const;
@@ -111,7 +112,7 @@ export class CategoriesService {
           updatedBy: userId,
         },
       });
-      await recordEvent(tx, householdId, userId, 'category.created', {
+      await recordEvent(tx, householdId, userId, EventType.CATEGORY_CREATED, {
         categoryId: row.id,
         key: row.key,
         label: row.label,
@@ -173,7 +174,7 @@ export class CategoriesService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.category.update({ where: { id }, data });
       if (changed.length > 0) {
-        await recordEvent(tx, existing.householdId!, userId, 'category.updated', {
+        await recordEvent(tx, existing.householdId!, userId, EventType.CATEGORY_UPDATED, {
           categoryId: id,
           changedFields: changed,
           before,
@@ -199,7 +200,7 @@ export class CategoriesService {
           where: { id },
           data: { deletedAt: new Date(), updatedBy: userId },
         });
-        await recordEvent(tx, existing.householdId!, userId, 'category.deleted', {
+        await recordEvent(tx, existing.householdId!, userId, EventType.CATEGORY_DELETED, {
           categoryId: id,
           key: existing.key,
           label: existing.label,
@@ -211,7 +212,7 @@ export class CategoriesService {
         where: { id },
         data: { archivedAt: new Date(), updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId!, userId, 'category.archived', {
+      await recordEvent(tx, existing.householdId!, userId, EventType.CATEGORY_ARCHIVED, {
         categoryId: id,
         key: existing.key,
         label: existing.label,
@@ -247,7 +248,7 @@ export class CategoriesService {
         where: { id },
         data: { archivedAt: null, updatedBy: userId },
       });
-      await recordEvent(tx, existing.householdId!, userId, 'category.restored', {
+      await recordEvent(tx, existing.householdId!, userId, EventType.CATEGORY_RESTORED, {
         categoryId: id,
         key: existing.key,
         label: existing.label,
@@ -284,7 +285,7 @@ export class CategoriesService {
           }),
         ),
       );
-      await recordEvent(tx, householdId, userId, 'category.reordered', {
+      await recordEvent(tx, householdId, userId, EventType.CATEGORY_REORDERED, {
         order: sorted.map((e, idx) => ({ categoryId: e.id, displayOrder: idx })),
       });
       return tx.category.findMany({
@@ -382,7 +383,7 @@ async function recordEvent(
   tx: AnyTx,
   householdId: string,
   actorId: string,
-  type: string,
+  type: EventType,
   payload: unknown,
 ) {
   await tx.$executeRaw`

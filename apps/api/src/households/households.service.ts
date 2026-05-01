@@ -7,6 +7,7 @@ import { MailService } from '../mail/mail.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { randomToken, hmacInvite } from '../common/hash';
+import { requestContext } from '../common/context';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -370,26 +371,30 @@ export class HouseholdsService {
     if (user.email.toLowerCase() !== row.email.toLowerCase()) throw Errors.inviteEmailMismatch();
 
     // Atomic: mark invite accepted + create membership (ignore if already member) + audit.
-    await this.prisma.$transaction(async (tx) => {
-      await tx.householdInvite.update({
-        where: { id: row.id },
-        data: { acceptedAt: new Date() },
-      });
-      const existing = await tx.householdMember.findUnique({
-        where: { householdId_userId: { householdId: row.household_id, userId } },
-      });
-      if (!existing) {
-        await tx.householdMember.create({
-          data: {
-            id: newId(),
-            householdId: row.household_id,
-            userId,
-            role: row.role,
-          },
+    // Wrap in requestContext.run so the household-scope middleware has a householdId to assert.
+    const current = requestContext.getStore() ?? {};
+    await requestContext.run({ ...current, householdId: row.household_id }, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.householdInvite.update({
+          where: { id: row.id },
+          data: { acceptedAt: new Date() },
         });
-      }
-      await this.recordEventTx(tx, row.household_id, userId, EventType.INVITE_ACCEPTED, {
-        inviteId: row.id,
+        const existing = await tx.householdMember.findUnique({
+          where: { householdId_userId: { householdId: row.household_id, userId } },
+        });
+        if (!existing) {
+          await tx.householdMember.create({
+            data: {
+              id: newId(),
+              householdId: row.household_id,
+              userId,
+              role: row.role,
+            },
+          });
+        }
+        await this.recordEventTx(tx, row.household_id, userId, EventType.INVITE_ACCEPTED, {
+          inviteId: row.id,
+        });
       });
     });
 

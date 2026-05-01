@@ -303,6 +303,7 @@ model IdempotencyKey {
 
   @@id([userId, key])
   @@index([createdAt], map: "idx_idempotency_keys_created_at")
+  @@index([expiresAt], map: "idx_idempotency_keys_expires_at")
   @@map("idempotency_keys")
 }
 
@@ -573,6 +574,7 @@ model WeeklySummarySend {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // unique constraint also serves as index for userId-prefix scans
   @@unique([userId, weekEndingAt], map: "uq_wss_user_week")
   @@map("weekly_summary_sends")
 }

@@ -81,6 +81,11 @@ export const envSchema = z.object({
 
   // ---- push ----
   EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+
+  // ---- app metadata ----
+  // Set by CI/CD (e.g. from package.json version or git tag). Defaults to '0.0.0'
+  // in local dev. Exposed via GET /api/v1/meta/links as `appVersion`.
+  APP_VERSION: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

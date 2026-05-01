@@ -3327,9 +3327,6 @@ components:
         - PIN_NOT_SET
         - PIN_FORMAT_INVALID
         - PIN_LOCKED
-        - OTP_INVALID
-        - OTP_EXPIRED
-        - OTP_MAX_ATTEMPTS
         - OTP_TOKEN_INVALID
         - OTP_TOKEN_EXPIRED
         - LOAN_NAME_TAKEN

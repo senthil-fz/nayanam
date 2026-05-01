@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-005-phase-11-idempotency-expiry-index
+      author: nayanam
+      comment: |
+        Phase 11 MINOR fix — D-MINOR-1.
+
+        The idempotency_keys reaper queries `WHERE expires_at < NOW()` but the
+        only existing index on the table is on `created_at`. Add a dedicated
+        index on `expires_at` so the reaper can use an index scan instead of a
+        sequential scan, which becomes significant as the table grows.
+
+        The `created_at` index is retained because some reporting queries may
+        use it; this changeset only adds the missing `expires_at` index.
+      changes:
+        - createIndex:
+            tableName: idempotency_keys
+            indexName: idx_idempotency_keys_expires_at
+            columns:
+              - column: { name: expires_at }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_idempotency_keys_expires_at
+
+      rollback:
+        - dropIndex:
+            tableName: idempotency_keys
+            indexName: idx_idempotency_keys_expires_at

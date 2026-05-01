@@ -101,7 +101,7 @@ export class MeController {
   }
 
   @Post('change-email/verify')
-  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async verifyEmailChange(@CurrentUser() ctx: AuthContext, @Body() body: VerifyEmailChangeDto) {
@@ -152,7 +152,7 @@ export class MeController {
   }
 
   @Post('security/verify-pin')
-  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async verifyPin(@CurrentUser() ctx: AuthContext, @Body() body: VerifyPinDto) {
@@ -160,7 +160,7 @@ export class MeController {
   }
 
   @Post('security/reset-pin')
-  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async resetPin(@CurrentUser() ctx: AuthContext, @Body() body: ResetPinDto) {

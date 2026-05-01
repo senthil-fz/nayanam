@@ -16,7 +16,9 @@ import { CurrentUser } from './current-user.decorator';
 import type { AuthContext } from '../common/context';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 
-const AUTH_THROTTLE = { ip: { limit: 5, ttl: 60_000 } };
+// Auth endpoints are sensitive — use the short bucket (5 req / 10 s per IP).
+// The long bucket's 120-req/hr cap also applies globally via IpThrottlerGuard.
+const AUTH_THROTTLE = { short: { limit: 5, ttl: 60_000 } };
 
 @Controller({ path: 'auth', version: '1' })
 export class AuthController {
