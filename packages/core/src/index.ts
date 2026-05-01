@@ -13,3 +13,4 @@ export * from './attachments';
 export * from './stats';
 export * from './me';
 export * from './households';
+export * from './loans';

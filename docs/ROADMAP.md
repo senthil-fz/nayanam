@@ -172,10 +172,10 @@ Standalone utility, no dependency on transactions.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-1001 | `Loan` table: principal, apr, termMonths, startDate, paidMonths, extraMonthly, lumpSum events | api | todo | |
-| F-1002 | Loan CRUD + amortization compute endpoint (schedule, totals, interest breakdown, with what-if params) | api | todo | |
-| F-1003 | Web: Loan analyzer screen — picker chips, hero card, P-vs-I bar, amortization stacked bar, extra-monthly slider, lump-sum slider with savings/ROI tiles | web | todo | |
-| F-1004 | Mobile: parity | mobile | todo | |
+| F-1001 | `Loan` table: principal, apr, termMonths, startDate, paidMonths, extraMonthly, lumpSum events | api | in-progress | |
+| F-1002 | Loan CRUD + amortization compute endpoint (schedule, totals, interest breakdown, with what-if params) | api | in-progress | |
+| F-1003 | Web: Loan analyzer screen — picker chips, hero card, P-vs-I bar, amortization stacked bar, extra-monthly slider, lump-sum slider with savings/ROI tiles | web | in-progress | |
+| F-1004 | Mobile: parity | mobile | in-progress | |
 
 ## Phase 11 — Tools: Chit Fund Tracker ⚡ (can run parallel to Phase 10)
 

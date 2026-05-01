@@ -261,6 +261,36 @@ export const cycle = {
   icons: CYCLE_ICONS,
 } as const;
 
+// ─────────────────────────────────────────────────────────────
+// Loan design tokens — consumed by web + mobile Loan Analyzer
+// (Phase 10). Reuse `ACCOUNT_COLORS` for the card gradient; the
+// icon set covers the four common loan archetypes (home / car /
+// education / generic).
+// ─────────────────────────────────────────────────────────────
+
+export const LOAN_ICONS = {
+  'home':           { name: 'Mortgage' },
+  'car':            { name: 'Auto' },
+  'graduation-cap': { name: 'Student' },
+  'credit-card':    { name: 'Credit' },
+  'landmark':       { name: 'Personal' },
+  'briefcase':      { name: 'Business' },
+} as const;
+
+export type LoanIconToken = keyof typeof LOAN_ICONS;
+
+export const LOAN_ICON_TOKENS = Object.keys(LOAN_ICONS) as LoanIconToken[];
+
+export const DEFAULT_LOAN_COLOR: AccountColorToken = 'indigo';
+export const DEFAULT_LOAN_ICON: LoanIconToken = 'home';
+
+export const loan = {
+  colors: ACCOUNT_COLORS,
+  icons: LOAN_ICONS,
+  defaultColor: DEFAULT_LOAN_COLOR,
+  defaultIcon: DEFAULT_LOAN_ICON,
+} as const;
+
 export const tokens = {
   accents: ACCENTS,
   light: LIGHT,
@@ -272,4 +302,5 @@ export const tokens = {
   account,
   category,
   cycle,
+  loan,
 } as const;

@@ -99,6 +99,8 @@ model Household {
   budgets       Budget[]
   budgetThresholdNotifications BudgetThresholdNotification[]
   attachments   Attachment[]
+  loans         Loan[]
+  loanLumpSums  LoanLumpSum[]
 
   @@map("households")
 }
@@ -501,6 +503,54 @@ model EmailChangeRequest {
 
   @@index([userId, createdAt(sort: Desc)], map: "idx_ecr_user_created")
   @@map("email_change_requests")
+}
+
+model Loan {
+  id                 String    @id @db.VarChar(26)
+  householdId        String    @map("household_id") @db.VarChar(26)
+  name               String
+  principalMinor     BigInt    @map("principal_minor")
+  currencyCode       String    @map("currency_code") @db.Char(3)
+  aprBps             Int       @map("apr_bps")
+  termMonths         Int       @map("term_months")
+  startDate          DateTime  @map("start_date") @db.Date
+  paidMonths         Int       @default(0) @map("paid_months")
+  extraMonthlyMinor  BigInt    @default(0) @map("extra_monthly_minor")
+  note               String?
+  colorToken         String?   @map("color_token")
+  iconToken          String?   @map("icon_token")
+  status             String    @default("ACTIVE")
+  displayOrder       Int?      @map("display_order")
+  archivedAt         DateTime? @map("archived_at") @db.Timestamptz(6)
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy          String    @map("created_by") @db.VarChar(26)
+  updatedBy          String    @map("updated_by") @db.VarChar(26)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household     @relation(fields: [householdId], references: [id])
+  lumpSums  LoanLumpSum[]
+
+  @@index([householdId, status, displayOrder], map: "idx_loans_household_status_display")
+  @@index([householdId, createdAt(sort: Desc)], map: "idx_loans_household_created")
+  @@map("loans")
+}
+
+model LoanLumpSum {
+  id              String   @id @db.VarChar(26)
+  householdId     String   @map("household_id") @db.VarChar(26)
+  loanId          String   @map("loan_id") @db.VarChar(26)
+  amountMinor     BigInt   @map("amount_minor")
+  appliedAtMonth  Int      @map("applied_at_month")
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id])
+  loan      Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId, appliedAtMonth], map: "idx_loan_lump_sums_loan_month")
+  @@map("loan_lump_sums")
 }
 
 model WeeklySummarySend {

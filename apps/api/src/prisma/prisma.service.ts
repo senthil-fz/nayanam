@@ -29,6 +29,8 @@ export const HOUSEHOLD_SCOPED_MODELS = new Set<string>([
   'Budget',
   'BudgetThresholdNotification',
   'Attachment',
+  'Loan',
+  'LoanLumpSum',
 ]);
 
 /**
@@ -55,6 +57,7 @@ export const SOFT_DELETE_MODELS = new Set<string>([
   'Budget',
   'Attachment',
   'Notification',
+  'Loan',
 ]);
 
 @Injectable()

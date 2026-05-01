@@ -1898,6 +1898,256 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
 
+  /loans:
+    get:
+      operationId: listLoans
+      summary: List loans with filters
+      description: |
+        Cursor paginated. Default sort: displayOrder NULLS LAST ASC, then
+        createdAt DESC. Archived loans (archivedAt IS NOT NULL) are excluded
+        unless `includeArchived=true`. List items omit the `lumpSums` array
+        to keep payloads small; fetch a single loan for embedded lump sums.
+        Any household member role is permitted.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/LoanStatus' }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Loans page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoansPage' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createLoan
+      summary: Create a loan
+      description: |
+        Creates a loan with optional initial lump sums. `currencyCode` is
+        validated against the household allowlist and is immutable after
+        create. Name uniqueness is case-insensitive among non-archived,
+        non-deleted loans. Roles: MEMBER+.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLoanInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /loans/summary:
+    get:
+      operationId: getLoansSummary
+      summary: Per-currency aggregate over active loans
+      description: |
+        Returns one bucket per distinct currency across ACTIVE loans in the
+        household. `weightedAprBps` is weighted by remaining principal.
+        Buckets are sorted by `currencyCode` ascending. Any household member
+        role is permitted.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+      responses:
+        '200':
+          description: Loans summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoansSummaryResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /loans/reorder:
+    post:
+      operationId: reorderLoans
+      summary: Reorder loans (full-set)
+      description: |
+        Body carries the full desired ordering of non-archived loans in the
+        household. Server normalizes displayOrder to dense 0..N-1 in one
+        transaction. Roles: MEMBER+.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderLoansInput' }
+      responses:
+        '200':
+          description: New ordering
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReorderLoansResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /loans/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Loan ULID.
+      - { $ref: '#/components/parameters/HouseholdId' }
+    get:
+      operationId: getLoan
+      summary: Get one loan with embedded lump sums
+      tags: [loans]
+      responses:
+        '200':
+          description: Loan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateLoan
+      summary: Update mutable loan fields
+      description: |
+        Partial update. `currencyCode` is NOT accepted here and returns
+        LOAN_CURRENCY_IMMUTABLE (422) if present (even if unchanged).
+        `status` is derived server-side and is not user-settable. When
+        `lumpSums` is present, it REPLACES the full set — existing rows are
+        hard-deleted and the provided array inserted atomically. Editing an
+        archived loan returns LOAN_ARCHIVED (409); editing a PAID_OFF loan
+        may return LOAN_ALREADY_PAID_OFF (409). Roles: MEMBER+.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLoanInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: archiveLoan
+      summary: Archive (or hard-delete) a loan
+      description: |
+        Hard-deletes the loan when it has zero lump sums and has never been
+        archived before; otherwise archives it (sets archivedAt, status =
+        ARCHIVED, clears displayOrder). Idempotent: re-archiving returns
+        200 with the archived row. Roles: ADMIN+.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Archived loan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '204': { description: Hard-deleted (no body) }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /loans/{id}/restore:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: restoreLoan
+      summary: Restore an archived loan
+      description: |
+        Clears archivedAt, recomputes status (PAID_OFF if paidMonths ≥
+        termMonths else ACTIVE), and re-appends to the displayOrder tail.
+        Idempotent when already active. If the name collides with an
+        active loan, returns LOAN_NAME_TAKEN (409). Roles: ADMIN+.
+      tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: Restored loan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Loan' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /loans/{id}/compute:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+      - { $ref: '#/components/parameters/HouseholdId' }
+    post:
+      operationId: computeLoan
+      summary: Compute amortization + baseline + savings for a loan
+      description: |
+        Read-only compute. POST is used only because the `lumpSums` array
+        can exceed practical URL lengths. Any field in the body is
+        optional; omitted fields fall back to the loan's saved
+        `extraMonthlyMinor` / `lumpSums`. `comparisonBaseline` chooses the
+        savings reference: `saved` (default) compares against the loan's
+        saved what-ifs; `contractual` compares against the zero-extra,
+        zero-lump contractual schedule. Idempotency-Key is NOT honored
+        here (the endpoint has no side effects); clients dedupe via query
+        cache. Any household member role is permitted.
+      tags: [loans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComputeLoanInput' }
+      responses:
+        '200':
+          description: Compute result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputeLoanResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
   /attachments/presign-upload:
     post:
       operationId: presignUploadAttachment
@@ -2992,6 +3242,14 @@ components:
         - OTP_MAX_ATTEMPTS
         - OTP_TOKEN_INVALID
         - OTP_TOKEN_EXPIRED
+        - LOAN_NAME_TAKEN
+        - LOAN_CURRENCY_IMMUTABLE
+        - LOAN_PAID_MONTHS_EXCEEDS_TERM
+        - LOAN_LUMP_SUM_MONTH_OUT_OF_RANGE
+        - LOAN_APR_OUT_OF_RANGE
+        - LOAN_TERM_OUT_OF_RANGE
+        - LOAN_ALREADY_PAID_OFF
+        - LOAN_ARCHIVED
 
     ErrorResponse:
       type: object
@@ -5509,6 +5767,423 @@ components:
           type: string
           description: Semver of the backend (env-driven).
 
+    LoanStatus:
+      type: string
+      enum: [ACTIVE, PAID_OFF, ARCHIVED]
+      description: |
+        ACTIVE when paidMonths < termMonths and archivedAt IS NULL;
+        PAID_OFF when paidMonths ≥ termMonths and archivedAt IS NULL;
+        ARCHIVED when archivedAt IS NOT NULL. Server-derived; not user-settable.
+
+    LoanLumpSum:
+      type: object
+      required: [id, householdId, loanId, amountMinor, appliedAtMonth, note, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string, description: Owning household ULID. }
+        loanId: { type: string, description: Parent loan ULID. }
+        amountMinor:
+          type: string
+          description: |
+            Positive lump-sum amount in the loan currency's minor units,
+            encoded as a decimal string for bigint-safety.
+        appliedAtMonth:
+          type: integer
+          minimum: 1
+          description: 1-based payment index at which the lump sum is applied (AFTER that month's P+I).
+        note:
+          type: [string, 'null']
+          maxLength: 200
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    LoanLumpSumInput:
+      type: object
+      required: [amountMinor, appliedAtMonth]
+      description: Payload shape used when creating or replacing a loan's lump-sum set.
+      properties:
+        amountMinor:
+          type: string
+          description: Positive minor-unit decimal string. Must be > 0.
+        appliedAtMonth:
+          type: integer
+          minimum: 1
+          description: 1-based payment index; must be > paidMonths and ≤ termMonths.
+        note:
+          type: [string, 'null']
+          maxLength: 200
+
+    Loan:
+      type: object
+      required:
+        - id
+        - householdId
+        - name
+        - principalMinor
+        - currencyCode
+        - aprBps
+        - termMonths
+        - startDate
+        - paidMonths
+        - extraMonthlyMinor
+        - note
+        - colorToken
+        - iconToken
+        - status
+        - displayOrder
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, description: ULID. }
+        householdId: { type: string, description: Owning household ULID. }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        principalMinor:
+          type: string
+          description: |
+            Original principal amount in the loan currency's minor units,
+            encoded as a decimal string for bigint-safety. Always > 0.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. Immutable after creation.
+        aprBps:
+          type: integer
+          minimum: 0
+          maximum: 20000
+          description: Annual percentage rate in basis points (650 = 6.50%).
+        termMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: Total contractual term in months.
+        startDate:
+          type: string
+          format: date
+          description: Civil calendar date (no tz) at which month 1 begins.
+        paidMonths:
+          type: integer
+          minimum: 0
+          description: Number of contractual monthly payments already made. 0..termMonths.
+        extraMonthlyMinor:
+          type: string
+          description: |
+            Saved default what-if extra payment (minor-unit decimal string,
+            ≥ 0). Defaults to "0".
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken:
+          type: [string, 'null']
+          description: Accent color key from the ui-tokens palette.
+        iconToken:
+          type: [string, 'null']
+          description: Icon key (e.g. "home", "car", "graduation-cap", "credit-card").
+        status: { $ref: '#/components/schemas/LoanStatus' }
+        displayOrder:
+          type: [integer, 'null']
+          minimum: 0
+          description: Dense 0..N-1 ordering per household active set; null when archived.
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the loan is archived; hidden from default lists.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        lumpSums:
+          type: array
+          description: |
+            Full lump-sum set attached to the loan. Populated on single-loan
+            responses (GET /loans/{id}, POST /loans, PATCH /loans/{id},
+            POST /loans/{id}/restore, POST /loans/{id}/compute). Omitted
+            from list-endpoint items to keep payloads small.
+          items: { $ref: '#/components/schemas/LoanLumpSum' }
+
+    CreateLoanInput:
+      type: object
+      required: [name, principalMinor, currencyCode, aprBps, termMonths, startDate]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        principalMinor:
+          type: string
+          description: Minor-unit decimal string. Must be > 0.
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 uppercase code. Immutable after creation.
+        aprBps:
+          type: integer
+          minimum: 0
+          maximum: 20000
+        termMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        startDate:
+          type: string
+          format: date
+        paidMonths:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Must be ≤ termMonths; otherwise LOAN_PAID_MONTHS_EXCEEDS_TERM (422).
+        extraMonthlyMinor:
+          type: string
+          description: Minor-unit decimal string, ≥ 0. Defaults to "0".
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken:
+          type: [string, 'null']
+        iconToken:
+          type: [string, 'null']
+        displayOrder:
+          type: integer
+          minimum: 0
+        lumpSums:
+          type: array
+          items: { $ref: '#/components/schemas/LoanLumpSumInput' }
+
+    UpdateLoanInput:
+      type: object
+      description: |
+        Partial update. All fields optional. `currencyCode` is NOT accepted
+        (sending it — even unchanged — returns LOAN_CURRENCY_IMMUTABLE
+        422). `status` is derived server-side. When `lumpSums` is present,
+        the full set is REPLACED atomically (old rows hard-deleted, new
+        rows inserted).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        principalMinor:
+          type: string
+        aprBps:
+          type: integer
+          minimum: 0
+          maximum: 20000
+        termMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        startDate:
+          type: string
+          format: date
+        paidMonths:
+          type: integer
+          minimum: 0
+        extraMonthlyMinor:
+          type: string
+        note:
+          type: [string, 'null']
+          maxLength: 500
+        colorToken:
+          type: [string, 'null']
+        iconToken:
+          type: [string, 'null']
+        displayOrder:
+          type: integer
+          minimum: 0
+        lumpSums:
+          type: array
+          items: { $ref: '#/components/schemas/LoanLumpSumInput' }
+
+    ReorderLoansEntry:
+      type: object
+      required: [id, displayOrder]
+      properties:
+        id: { type: string }
+        displayOrder:
+          type: integer
+          minimum: 0
+
+    ReorderLoansInput:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items: { $ref: '#/components/schemas/ReorderLoansEntry' }
+
+    ReorderLoansResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Loan' }
+
+    LoansPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              description: List items omit the `lumpSums` array.
+              items: { $ref: '#/components/schemas/Loan' }
+
+    LoansSummaryCurrencyBucket:
+      type: object
+      required:
+        - currencyCode
+        - totalRemainingPrincipalMinor
+        - totalMonthlyPaymentMinor
+        - weightedAprBps
+        - activeLoanCount
+      properties:
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        totalRemainingPrincipalMinor:
+          type: string
+          description: Sum of current remaining principal across ACTIVE loans in this currency (minor-unit decimal string).
+        totalMonthlyPaymentMinor:
+          type: string
+          description: Sum of contractual base monthly P+I across ACTIVE loans in this currency (minor-unit decimal string).
+        weightedAprBps:
+          type: integer
+          minimum: 0
+          description: APR in basis points, weighted by remaining principal.
+        activeLoanCount:
+          type: integer
+          minimum: 0
+
+    LoansSummaryResponse:
+      type: object
+      required: [byCurrency]
+      properties:
+        byCurrency:
+          type: array
+          description: One bucket per distinct currency across ACTIVE loans, sorted by currencyCode ascending.
+          items: { $ref: '#/components/schemas/LoansSummaryCurrencyBucket' }
+
+    AmortizationRow:
+      type: object
+      required: [month, paymentMinor, principalMinor, interestMinor, lumpSumMinor, balanceMinor]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          description: 1-based month index counted from loan origination.
+        paymentMinor:
+          type: string
+          description: Actual payment applied this month (minor-unit decimal string). May be < base on the final row.
+        principalMinor:
+          type: string
+          description: Principal portion of this month's payment (minor-unit decimal string).
+        interestMinor:
+          type: string
+          description: Interest portion of this month's payment (minor-unit decimal string).
+        lumpSumMinor:
+          type: string
+          description: Lump sum applied this month after the P+I payment (minor-unit decimal string); "0" if none.
+        balanceMinor:
+          type: string
+          description: Post-payment principal balance (minor-unit decimal string).
+
+    AmortizationScheduleTotals:
+      type: object
+      required:
+        - totalPaidMinor
+        - totalInterestMinor
+        - totalPrincipalMinor
+        - monthsToPayoff
+        - payoffDate
+      properties:
+        totalPaidMinor: { type: string }
+        totalInterestMinor: { type: string }
+        totalPrincipalMinor: { type: string }
+        monthsToPayoff:
+          type: integer
+          minimum: 0
+          description: Month count from month 1 of the loan (not from paidMonths + 1).
+        payoffDate:
+          type: string
+          format: date
+          description: startDate + monthsToPayoff, civil calendar date.
+
+    AmortizationSchedule:
+      type: object
+      required:
+        - baseMonthlyPaymentMinor
+        - effectiveMonthlyPaymentMinor
+        - rows
+        - totals
+      properties:
+        baseMonthlyPaymentMinor:
+          type: string
+          description: Contractual P+I monthly payment (minor-unit decimal string).
+        effectiveMonthlyPaymentMinor:
+          type: string
+          description: Base + extraMonthlyMinor (minor-unit decimal string).
+        rows:
+          type: array
+          description: Schedule rows from paidMonths + 1 through payoff. Empty when the loan is already paid off.
+          items: { $ref: '#/components/schemas/AmortizationRow' }
+        totals: { $ref: '#/components/schemas/AmortizationScheduleTotals' }
+
+    LoanSavings:
+      type: object
+      required: [interestSavedMinor, monthsSaved, payoffDateShiftMonths, effectiveRoiBps]
+      properties:
+        interestSavedMinor:
+          type: string
+          description: max(0, baseline.totalInterestMinor − scenario.totalInterestMinor) as a minor-unit decimal string.
+        monthsSaved:
+          type: integer
+          minimum: 0
+          description: baseline.monthsToPayoff − scenario.monthsToPayoff, clamped ≥ 0.
+        payoffDateShiftMonths:
+          type: integer
+          description: Signed integer month delta (baseline.monthsToPayoff − scenario.monthsToPayoff). Positive = scenario pays off sooner.
+        effectiveRoiBps:
+          type: [integer, 'null']
+          description: |
+            Annualized ROI of the scenario's lump-sum outlay, in basis points.
+            Null when monthsSaved === 0, total lump-sum outlay === 0, or
+            interestSaved === 0.
+
+    ComputeLoanInput:
+      type: object
+      description: |
+        All fields optional. Omitted fields fall back to the loan's saved
+        `extraMonthlyMinor` / `lumpSums`.
+      properties:
+        extraMonthlyMinor:
+          type: string
+          description: Minor-unit decimal string, ≥ 0.
+        lumpSums:
+          type: array
+          items: { $ref: '#/components/schemas/LoanLumpSumInput' }
+        comparisonBaseline:
+          type: string
+          enum: [saved, contractual]
+          default: saved
+          description: |
+            `saved` compares scenario against the loan's saved what-ifs;
+            `contractual` compares against the zero-extra, zero-lump schedule.
+
+    ComputeLoanResponse:
+      type: object
+      required: [loan, scenario, baseline, savings]
+      properties:
+        loan: { $ref: '#/components/schemas/Loan' }
+        scenario: { $ref: '#/components/schemas/AmortizationSchedule' }
+        baseline: { $ref: '#/components/schemas/AmortizationSchedule' }
+        savings: { $ref: '#/components/schemas/LoanSavings' }
+
 security:
   - BearerAuth: []
 
@@ -5544,3 +6219,5 @@ tags:
     description: Receipt + document attachments on domain rows (v1 scope — transactions). Presigned S3 upload, finalize, signed download URLs, soft-delete with 24h restore window.
   - name: stats
     description: Read-only aggregate analytics over transactions (overview, trends, category breakdown, daily spend, sparklines, Sankey flow).
+  - name: loans
+    description: User-declared fixed-rate loans with amortization scheduling, what-if compute (extra monthly + lump sums), and per-currency summary. Loans are projections; they do not affect the ledger.

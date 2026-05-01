@@ -1,0 +1,161 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260424-010-phase-10-loans
+      author: nayanam
+      comment: |
+        Phase 10 — Loan Analyzer. User-declared fixed-rate loans (principal,
+        APR, term, paid-months, extras) and their lump-sum prepayment plans.
+        Loans are projections only — they do not affect the ledger. `loans`
+        is soft-delete + audit; `loan_lump_sums` is hard-delete-on-replace
+        (PATCH replaces the full set atomically).
+
+        Enum-ish text with CHECK (parallel to bills/budgets). Name uniqueness
+        is a partial unique index over (household, lower(name)) WHERE not
+        archived/deleted so archived homonyms do not collide.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: loans
+      changes:
+        - createTable:
+            tableName: loans
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_loans_household
+                    references: households(id)
+                    deleteCascade: false
+              - column: { name: name, type: TEXT, constraints: { nullable: false } }
+              - column: { name: principal_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: currency_code, type: CHAR(3), constraints: { nullable: false } }
+              - column: { name: apr_bps, type: INT, constraints: { nullable: false } }
+              - column: { name: term_months, type: INT, constraints: { nullable: false } }
+              - column: { name: start_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: paid_months, type: INT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: extra_monthly_minor, type: BIGINT, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: note, type: TEXT }
+              - column: { name: color_token, type: TEXT }
+              - column: { name: icon_token, type: TEXT }
+              - column: { name: status, type: TEXT, defaultValue: 'ACTIVE', constraints: { nullable: false } }
+              - column: { name: display_order, type: INT }
+              - column: { name: archived_at, type: TIMESTAMPTZ }
+              - column: { name: deleted_at, type: TIMESTAMPTZ }
+              - column:
+                  name: created_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_loans_created_by
+                    references: users(id)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_loans_updated_by
+                    references: users(id)
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_status
+              CHECK (status IN ('ACTIVE','PAID_OFF','ARCHIVED'));
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_principal_positive
+              CHECK (principal_minor > 0);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_apr_range
+              CHECK (apr_bps >= 0 AND apr_bps <= 20000);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_term_range
+              CHECK (term_months > 0 AND term_months <= 600);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_paid_months_range
+              CHECK (paid_months >= 0 AND paid_months <= term_months);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_extra_monthly_nonneg
+              CHECK (extra_monthly_minor >= 0);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_name_len
+              CHECK (char_length(name) BETWEEN 1 AND 80);
+        - sql:
+            sql: >
+              ALTER TABLE loans ADD CONSTRAINT ck_loans_note_len
+              CHECK (note IS NULL OR char_length(note) <= 500);
+        - sql:
+            sql: >
+              CREATE INDEX idx_loans_household_status_display
+              ON loans (household_id, status, display_order)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE INDEX idx_loans_household_created
+              ON loans (household_id, created_at DESC)
+              WHERE deleted_at IS NULL;
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_loans_household_name_active
+              ON loans (household_id, lower(name))
+              WHERE deleted_at IS NULL AND archived_at IS NULL;
+
+        - createTable:
+            tableName: loan_lump_sums
+            columns:
+              - column: { name: id, type: VARCHAR(26), constraints: { primaryKey: true, nullable: false } }
+              - column:
+                  name: household_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_loan_lump_sums_household
+                    references: households(id)
+                    deleteCascade: false
+              - column:
+                  name: loan_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_loan_lump_sums_loan
+                    references: loans(id)
+                    deleteCascade: true
+              - column: { name: amount_minor, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: applied_at_month, type: INT, constraints: { nullable: false } }
+              - column: { name: note, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMPTZ, defaultValueComputed: now(), constraints: { nullable: false } }
+        - sql:
+            sql: >
+              ALTER TABLE loan_lump_sums ADD CONSTRAINT ck_loan_lump_sums_amount_month
+              CHECK (amount_minor > 0 AND applied_at_month >= 1);
+        - sql:
+            sql: >
+              ALTER TABLE loan_lump_sums ADD CONSTRAINT ck_loan_lump_sums_note_len
+              CHECK (note IS NULL OR char_length(note) <= 200);
+        - sql:
+            sql: >
+              CREATE INDEX idx_loan_lump_sums_loan_month
+              ON loan_lump_sums (loan_id, applied_at_month);
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_loan_lump_sums_loan_month;
+        - dropTable:
+            tableName: loan_lump_sums
+        - sql:
+            sql: DROP INDEX IF EXISTS uq_loans_household_name_active;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_loans_household_created;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_loans_household_status_display;
+        - dropTable:
+            tableName: loans

@@ -67,6 +67,26 @@ HTTP status + stable machine-readable `code`. Never leak stack traces.
 ### Pagination
 Cursor-based by default: `?cursor=...&limit=50`. Response: `{ items, nextCursor }`.
 
+### Testing standards
+
+All three apps test with **Vitest** for units. E2E is **Playwright** for both API and web (Playwright's `request` fixture drives the API; browser fixture drives the web). Mobile e2e is **Maestro** (YAML flows under `apps/mobile/.maestro/`).
+
+| Layer       | Unit tests                              | E2E tests                                                  |
+| ----------- | --------------------------------------- | ---------------------------------------------------------- |
+| API         | Vitest (services, mappers, guards, validators) | Playwright (`request` fixture against running server) |
+| Web         | Vitest + Testing Library (components, hooks)   | Playwright (browser)                                  |
+| Mobile      | Vitest (hooks, store, schema logic)            | Maestro (`apps/mobile/.maestro/*.yaml`)               |
+| Shared core | Vitest                                         | —                                                     |
+
+Discipline:
+- Unit tests live colocated as `*.test.ts(x)`.
+- API e2e under `apps/api/test/e2e/**.e2e.ts`. Web e2e under `apps/web/e2e/**.spec.ts`.
+- Every new endpoint gets at least one Playwright API test (happy path + auth/permission edge).
+- Every new user-facing screen gets at least one e2e (web Playwright OR mobile Maestro flow).
+- Every household-scoped query gets a unit test asserting cross-household isolation.
+- Every money-arithmetic path gets a unit test for currency mismatch + zero-decimal currency.
+- Tests run in CI; `pnpm test` (Vitest) and `pnpm e2e` (Playwright) are green before merge.
+
 ### Naming
 - DB tables: `snake_case` plural (`transactions`, `household_members`).
 - API paths: `kebab-case` plural (`/api/v1/households/:id/transactions`).
@@ -131,7 +151,7 @@ When briefing a teammate, always include the relevant ones:
 - **Idempotency-Key** accepted on every mutating endpoint.
 - **Shared error envelope** `{ error: { code, message, details? } }`.
 - **Soft delete + audit** on core tables.
-- **No tests** for v1 — do not add test scaffolding unless the user asks.
+- **Tests required** — every feature ships with unit tests for the layers it touches and at least one e2e test per user-facing flow (see Testing standards below).
 - **No cloud ops** — no EAS builds, no deploys, no `pnpm install`. Declare deps in package.json and let the user install.
 - **Pin new deps to latest stable.**
 

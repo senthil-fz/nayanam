@@ -105,6 +105,17 @@ type WeeklySummaryPreview = ApiSchemas['WeeklySummaryPreview'];
 type MetaLinksResponse = ApiSchemas['MetaLinksResponse'];
 type HouseholdUpdate = ApiSchemas['HouseholdUpdate'];
 
+type Loan = ApiSchemas['Loan'];
+type LoansPage = ApiSchemas['LoansPage'];
+type LoanStatus = ApiSchemas['LoanStatus'];
+type CreateLoanInput = ApiSchemas['CreateLoanInput'];
+type UpdateLoanInput = ApiSchemas['UpdateLoanInput'];
+type ReorderLoansInput = ApiSchemas['ReorderLoansInput'];
+type ReorderLoansResponse = ApiSchemas['ReorderLoansResponse'];
+type LoansSummaryResponse = ApiSchemas['LoansSummaryResponse'];
+type ComputeLoanInput = ApiSchemas['ComputeLoanInput'];
+type ComputeLoanResponse = ApiSchemas['ComputeLoanResponse'];
+
 type Bill = ApiSchemas['Bill'];
 type BillsPage = ApiSchemas['BillsPage'];
 type BillPaymentsPage = ApiSchemas['BillPaymentsPage'];
@@ -707,6 +718,35 @@ export function createApiClient(opts: ApiClientOptions) {
     getBudgetHistory: (id: string, periods = 6) =>
       request<BudgetHistoryResponse>(`/budgets/${id}/history`, {
         query: { periods },
+      }),
+
+    // Loans (household-scoped)
+    listLoans: (params?: {
+      cursor?: string;
+      limit?: number;
+      status?: LoanStatus;
+      includeArchived?: boolean;
+    }) => request<LoansPage>('/loans', { query: params }),
+    getLoan: (id: string) => request<Loan>(`/loans/${id}`),
+    createLoan: (body: CreateLoanInput, idempotencyKey?: string) =>
+      request<Loan>('/loans', { method: 'POST', body, idempotencyKey }),
+    updateLoan: (id: string, body: UpdateLoanInput, idempotencyKey?: string) =>
+      request<Loan>(`/loans/${id}`, { method: 'PATCH', body, idempotencyKey }),
+    archiveLoan: (id: string, idempotencyKey?: string) =>
+      request<Loan>(`/loans/${id}`, { method: 'DELETE', idempotencyKey }),
+    restoreLoan: (id: string, idempotencyKey?: string) =>
+      request<Loan>(`/loans/${id}/restore`, { method: 'POST', idempotencyKey }),
+    reorderLoans: (body: ReorderLoansInput, idempotencyKey?: string) =>
+      request<ReorderLoansResponse>('/loans/reorder', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+      }),
+    getLoansSummary: () => request<LoansSummaryResponse>('/loans/summary'),
+    computeLoan: (id: string, body: ComputeLoanInput) =>
+      request<ComputeLoanResponse>(`/loans/${id}/compute`, {
+        method: 'POST',
+        body,
       }),
 
     // Stats (read-only; household-scoped via X-Household-Id)

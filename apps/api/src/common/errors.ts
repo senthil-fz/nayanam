@@ -379,4 +379,58 @@ export const Errors = {
       HttpStatus.LOCKED,
       { retryAfterSeconds },
     ),
+  // --- Loans (Phase 10) ---
+  loanNameTaken: (name: string) =>
+    new AppError(
+      'LOAN_NAME_TAKEN',
+      'An active loan with that name already exists.',
+      HttpStatus.CONFLICT,
+      { name },
+    ),
+  loanCurrencyImmutable: () =>
+    new AppError(
+      'LOAN_CURRENCY_IMMUTABLE',
+      'Loan currencyCode is immutable after creation.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  loanPaidMonthsExceedsTerm: (details?: Record<string, unknown>) =>
+    new AppError(
+      'LOAN_PAID_MONTHS_EXCEEDS_TERM',
+      'paidMonths must be ≤ termMonths.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  loanLumpSumMonthOutOfRange: (details?: Record<string, unknown>) =>
+    new AppError(
+      'LOAN_LUMP_SUM_MONTH_OUT_OF_RANGE',
+      'Lump-sum appliedAtMonth must be > paidMonths and ≤ termMonths.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  loanAprOutOfRange: (details?: Record<string, unknown>) =>
+    new AppError(
+      'LOAN_APR_OUT_OF_RANGE',
+      'aprBps must be between 0 and 20000 (0% and 200%).',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  loanTermOutOfRange: (details?: Record<string, unknown>) =>
+    new AppError(
+      'LOAN_TERM_OUT_OF_RANGE',
+      'termMonths must be between 1 and 600.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+    ),
+  loanAlreadyPaidOff: () =>
+    new AppError(
+      'LOAN_ALREADY_PAID_OFF',
+      'Loan is paid off; restore before editing.',
+      HttpStatus.CONFLICT,
+    ),
+  loanArchived: () =>
+    new AppError(
+      'LOAN_ARCHIVED',
+      'Loan is archived; restore it before editing.',
+      HttpStatus.CONFLICT,
+    ),
 };

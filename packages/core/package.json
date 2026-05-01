@@ -21,7 +21,8 @@
     "./attachments": "./src/attachments/index.ts",
     "./stats": "./src/stats/index.ts",
     "./me": "./src/me/index.ts",
-    "./households": "./src/households/index.ts"
+    "./households": "./src/households/index.ts",
+    "./loans": "./src/loans/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

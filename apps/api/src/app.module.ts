@@ -22,6 +22,7 @@ import { StorageModule } from './storage/storage.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { MetaModule } from './meta/meta.module';
 import { WeeklySummariesModule } from './weekly-summaries/weekly-summaries.module';
+import { LoansModule } from './loans/loans.module';
 import { RequestContextMiddleware } from './common/context.middleware';
 import { LastSeenMiddleware } from './sessions/last-seen.middleware';
 
@@ -57,6 +58,7 @@ import { LastSeenMiddleware } from './sessions/last-seen.middleware';
     AttachmentsModule,
     MetaModule,
     WeeklySummariesModule,
+    LoansModule,
     HealthModule,
   ],
   providers: [
