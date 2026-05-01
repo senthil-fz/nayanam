@@ -6,7 +6,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
-import { randomOtp, randomToken, sha256Hex } from '../common/hash';
+import { hmacOtp, hmacRefresh, randomOtp, randomToken, timingSafeEqualHex } from '../common/hash';
+
+// Constant dummy hex (64 chars) used to equalize HMAC work on unknown-user
+// branches in verifyOtpForSecurity. Computed once; comparing against it always
+// fails but takes the same time as a real compare.
+const DUMMY_OTP_HASH = '0'.repeat(64);
 
 const OTP_TTL_SECONDS = 600;
 const OTP_MAX_ATTEMPTS = 5;
@@ -40,7 +45,7 @@ export class AuthService {
     if (recent >= OTP_REQUEST_MAX_IN_WINDOW) throw Errors.authOtpThrottled();
 
     const code = randomOtp();
-    const codeHash = sha256Hex(code);
+    const codeHash = hmacOtp(code);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
     await this.prisma.otpCode.create({
@@ -60,7 +65,7 @@ export class AuthService {
 
   async verifyOtp(emailRaw: string, code: string, req?: Request) {
     const email = emailRaw.trim().toLowerCase();
-    const codeHash = sha256Hex(code);
+    const codeHash = hmacOtp(code);
 
     // Find the most recent active OTP for this email.
     const otp = await this.prisma.otpCode.findFirst({
@@ -75,15 +80,24 @@ export class AuthService {
 
     if (!otp) throw Errors.authOtpInvalid();
 
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw Errors.authOtpInvalid({ reason: 'too_many_attempts' });
-
-    if (otp.codeHash !== codeHash) {
-      await this.prisma.otpCode.update({
+    if (!timingSafeEqualHex(otp.codeHash, codeHash)) {
+      // Atomically increment attempts and read the new count in one round-trip.
+      const updated = await this.prisma.otpCode.update({
         where: { id: otp.id },
         data: { attempts: { increment: 1 } },
+        select: { attempts: true },
       });
+      // Throw a consistent error regardless of attempt count to avoid leaking
+      // which threshold was crossed.
+      void updated.attempts;
       throw Errors.authOtpInvalid();
     }
+
+    // Check attempt count only after the HMAC passes — at this point the code
+    // is correct so we don't need to enforce lockout; consuming the OTP below
+    // will prevent replay. But we still check in case of a race where the OTP
+    // was valid but already consumed too many times on parallel requests.
+    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw Errors.authOtpInvalid();
 
     await this.prisma.otpCode.update({
       where: { id: otp.id },
@@ -132,7 +146,7 @@ export class AuthService {
   async issueSession(userId: string, req?: Request) {
     const sessionId = newId();
     const refreshToken = randomToken(40);
-    const refreshHash = sha256Hex(refreshToken);
+    const refreshHash = hmacRefresh(refreshToken);
     const now = new Date();
     const refreshExpires = new Date(now.getTime() + REFRESH_TTL_SECONDS * 1000);
 
@@ -161,7 +175,9 @@ export class AuthService {
     const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
     if (!session || session.revokedAt) throw Errors.authSessionRevoked();
     if (session.expiresAt.getTime() < Date.now()) throw Errors.authTokenInvalid();
-    if (session.refreshTokenHash !== sha256Hex(raw)) throw Errors.authTokenInvalid();
+    if (!timingSafeEqualHex(session.refreshTokenHash, hmacRefresh(raw))) {
+      throw Errors.authTokenInvalid();
+    }
 
     // Rotate: issue new session, revoke old.
     await this.prisma.session.update({
@@ -184,7 +200,7 @@ export class AuthService {
     return this.jwt.sign(
       { sub: userId, sid: sessionId, typ: 'access' },
       {
-        secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret-change-me',
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: ACCESS_TTL_SECONDS,
       },
     );
@@ -224,7 +240,7 @@ export class AuthService {
     const token = this.jwt.sign(
       { sub: userId, typ: 'otp', aud: 'security-reset' },
       {
-        secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret-change-me',
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: ttl,
       },
     );
@@ -239,7 +255,7 @@ export class AuthService {
   private verifyOtpTokenForSecuritySync(token: string): string {
     try {
       const payload = this.jwt.verify<{ sub: string; typ?: string; aud?: string }>(token, {
-        secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret-change-me',
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
       if (payload.typ !== 'otp' || payload.aud !== 'security-reset' || !payload.sub) {
         throw Errors.authTokenInvalid();
@@ -257,10 +273,11 @@ export class AuthService {
   async verifyOtpForSecurity(
     emailRaw: string,
     code: string,
-  ): Promise<{ otpToken: string; expiresInSeconds: number }> {
-    // see end of method
+  ): Promise<{ otpToken: string; expiresAt: string }> {
     const email = emailRaw.trim().toLowerCase();
-    const codeHash = sha256Hex(code);
+    // Always compute the HMAC, even on branches we'll abort on, so that the
+    // unknown-user / no-pending-OTP paths take the same wall time as success.
+    const codeHash = hmacOtp(code);
 
     const otp = await this.prisma.otpCode.findFirst({
       where: {
@@ -271,21 +288,39 @@ export class AuthService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (!otp) throw Errors.authOtpInvalid();
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw Errors.authOtpInvalid({ reason: 'too_many_attempts' });
-    if (otp.codeHash !== codeHash) {
+
+    // No active OTP — still perform a constant-time compare against a dummy
+    // hash so the response shape and timing match the invalid-OTP path. This
+    // prevents distinguishing "no OTP requested" from "wrong OTP" via timing.
+    if (!otp) {
+      timingSafeEqualHex(codeHash, DUMMY_OTP_HASH);
+      throw Errors.authOtpInvalid();
+    }
+
+    if (!timingSafeEqualHex(otp.codeHash, codeHash)) {
+      // Atomically increment attempts in one round-trip (avoids concurrent-increment race).
       await this.prisma.otpCode.update({
         where: { id: otp.id },
         data: { attempts: { increment: 1 } },
+        select: { attempts: true },
       });
       throw Errors.authOtpInvalid();
     }
+
+    if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+      throw Errors.authOtpInvalid();
+    }
+
     await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
 
     const user = await this.prisma.user.findUnique({ where: { email } });
+    // Mirror the invalid-OTP failure path identically — same error code, same
+    // (lack of) detail — so an attacker cannot distinguish "valid OTP for an
+    // unknown user" from "wrong OTP".
     if (!user) throw Errors.authOtpInvalid();
     const signed = this.signOtpTokenForSecurity(user.id);
-    return { otpToken: signed.token, expiresInSeconds: signed.expiresInSeconds };
+    const expiresAt = new Date(Date.now() + signed.expiresInSeconds * 1000).toISOString();
+    return { otpToken: signed.token, expiresAt };
   }
 }
 

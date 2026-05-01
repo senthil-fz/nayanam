@@ -11,7 +11,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdMemberGuard } from './household-member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthContext } from '../common/context';
@@ -26,7 +25,6 @@ import {
 } from './households.dto';
 
 @Controller({ path: 'households', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class HouseholdsController {
   constructor(private readonly svc: HouseholdsService) {}
 
@@ -38,6 +36,7 @@ export class HouseholdsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@CurrentUser() ctx: AuthContext, @Body() body: HouseholdCreateDto) {
     return this.svc.create(ctx.userId, body.name, body.defaultCurrencyCode);
   }
@@ -71,6 +70,7 @@ export class HouseholdsController {
   @Post(':id/invites')
   @UseGuards(HouseholdMemberGuard)
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   createInvite(
     @CurrentUser() ctx: AuthContext,
     @Param('id') id: string,
@@ -82,6 +82,7 @@ export class HouseholdsController {
   @Delete(':id/invites/:inviteId')
   @UseGuards(HouseholdMemberGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(IdempotencyInterceptor)
   async revokeInvite(
     @CurrentUser() ctx: AuthContext,
     @Param('id') id: string,
@@ -140,12 +141,12 @@ export class HouseholdsController {
 }
 
 @Controller({ path: 'invites', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class InvitesController {
   constructor(private readonly svc: HouseholdsService) {}
 
   @Post('accept')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
   accept(@CurrentUser() ctx: AuthContext, @Body() body: InviteAcceptDto) {
     return this.svc.acceptInvite(ctx.userId, body.token);
   }

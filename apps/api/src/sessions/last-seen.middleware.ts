@@ -1,7 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { hmacIp } from '../common/hash';
 import type { AuthContext } from '../common/context';
 
 /**
@@ -34,7 +34,7 @@ export class LastSeenMiddleware implements NestMiddleware {
     this.lastTouch.set(sessionId, now);
 
     const ip = extractIp(req);
-    const ipHash = ip ? hashIp(ip) : null;
+    const ipHash = ip ? hmacIp(ip) : null;
 
     // Fire-and-forget; never block the request on the session bump.
     void this.prisma.session
@@ -59,7 +59,3 @@ function extractIp(req: Request): string | null {
   return req.socket?.remoteAddress ?? null;
 }
 
-function hashIp(ip: string): string {
-  const salt = process.env.SESSION_SALT ?? '';
-  return createHash('sha256').update(`${ip}${salt}`).digest('hex');
-}

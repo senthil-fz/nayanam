@@ -2,7 +2,7 @@
 name: jarvis-db
 description: Reviews database changes — apps/api/prisma/schema.prisma and db/liquibase/changelogs/** — against the jarvis-db checklist. Enforces Liquibase-only migrations, no schema drift, BigInt money fields, indexes on FKs, soft-delete columns, householdId on tenant-owned models. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

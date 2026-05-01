@@ -2,7 +2,7 @@
 name: jarvis-nestjs
 description: Reviews NestJS backend code (apps/api/**) against the jarvis-nestjs checklist — module layering, validation (nestjs-zod), auth (Passport + JWT), idempotency wiring, pagination, exception handling, observability. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

@@ -1,0 +1,83 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-001-phase-11-hardening-idempotency
+      author: nayanam
+      comment: |
+        Phase 11 — Platform Hardening (BLOCKER cluster I1–I4).
+
+        Re-keys `idempotency_keys` so that the same `Idempotency-Key` from two
+        different users no longer collides:
+          - drops the existing PK on `key`
+          - adds composite PK on (user_id, key)
+          - adds `request_hash CHAR(64) NOT NULL` so the interceptor can detect
+            same-key + different-body replays and return 409 IDEMPOTENCY_CONFLICT
+          - adds `idx_idempotency_keys_created_at` for the upcoming TTL sweep job
+        Existing rows are throwaway (24h TTL — see spec Assumptions), so the
+        table is truncated rather than backfilled.
+
+        NOTE: Truncation of `sessions` and `email_change_requests` has been
+        extracted to changeset 20260501-001a-phase-11-truncate-stale-sessions.
+      preConditions:
+        - onFail: HALT
+        - and:
+            - tableExists: { tableName: idempotency_keys }
+      changes:
+        # 1. Truncate first so the column add + PK swap operate on an empty table.
+        - sql:
+            sql: TRUNCATE TABLE idempotency_keys;
+
+        # 2. Drop the old single-column PK on `key`.
+        - dropPrimaryKey:
+            tableName: idempotency_keys
+            constraintName: idempotency_keys_pkey
+
+        # 3. Add `request_hash` — table was truncated above so no existing rows
+        #    need a default; this column is intentionally NOT NULL from the start.
+        - addColumn:
+            tableName: idempotency_keys
+            columns:
+              - column:
+                  name: request_hash
+                  type: CHAR(64)
+                  constraints:
+                    nullable: false
+            preConditions:
+              - onFail: HALT
+              - columnNotExists:
+                  tableName: idempotency_keys
+                  columnName: request_hash
+
+        # 4. Composite PK on (user_id, key).
+        - addPrimaryKey:
+            tableName: idempotency_keys
+            columnNames: user_id, key
+            constraintName: idempotency_keys_pkey
+
+        # 5. Index for the 24h TTL sweep job.
+        - createIndex:
+            tableName: idempotency_keys
+            indexName: idx_idempotency_keys_created_at
+            columns:
+              - column: { name: created_at }
+
+      rollback:
+        # DATA LOSS: sessions and email_change_requests rows truncated in forward pass cannot be restored. Rollback only undoes the schema changes.
+        - sql:
+            sql: "-- DATA LOSS: sessions and email_change_requests rows truncated in forward pass cannot be restored. Rollback only undoes the schema changes."
+        # Truncate idempotency_keys before restoring single-column PK: rows inserted
+        # under the composite PK regime may share the same `key` value across
+        # different users, which would violate the old uniqueness constraint.
+        - sql:
+            sql: TRUNCATE TABLE idempotency_keys;
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_idempotency_keys_created_at;
+        - dropPrimaryKey:
+            tableName: idempotency_keys
+            constraintName: idempotency_keys_pkey
+        - dropColumn:
+            tableName: idempotency_keys
+            columnName: request_hash
+        - addPrimaryKey:
+            tableName: idempotency_keys
+            columnNames: key
+            constraintName: idempotency_keys_pkey

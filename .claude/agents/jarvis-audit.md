@@ -2,7 +2,7 @@
 name: jarvis-audit
 description: Reviews soft-delete + audit + event-log invariants — deletedAt / createdBy / updatedBy on every core table, Prisma middleware filters deleted rows, every domain mutation emits an Event row in the same DB transaction, event types from a registry. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

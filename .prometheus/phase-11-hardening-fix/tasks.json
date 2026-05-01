@@ -1,0 +1,452 @@
+{
+  "feature": {
+    "slug": "phase-11-hardening-fix",
+    "title": "Phase 11 Hardening — Fix sweep",
+    "mode": "fix",
+    "phase": "dispatch",
+    "createdAt": "2026-05-01T00:00:00Z",
+    "updatedAt": "2026-05-01T11:36:00Z",
+    "startCommit": "7538c5cb95bed851ffae83bf690566edbe0011d8"
+  },
+  "gates": {
+    "contract": true,
+    "tenancy": true,
+    "schema": true,
+    "money": false,
+    "idempotency": true,
+    "coverage": true,
+    "blockers": true,
+    "large": true,
+    "cross_platform": false
+  },
+  "tasks": [
+    {
+      "id": "task-001",
+      "title": "C-001: Fix tenancy scope bypass and raw-SQL household_id leaks",
+      "type": "domain",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "No prisma.<model>.findUnique on a household-scoped model can return a row from another household; covered by new unit test asserting cross-tenant isolation.",
+        "acceptInvite end-to-end test passes — invite created in H1, accepted by user with no active household; raw queries in listMembers and resolveUserAvatarAttachmentId include household_id predicate.",
+        "isPlainIdLookup returns false for any where clause containing fields other than id."
+      ],
+      "affects": [
+        "apps/api/src/prisma/prisma.service.ts",
+        "apps/api/src/households/households.service.ts",
+        "apps/api/src/me/me.service.ts"
+      ],
+      "trips_gates": [
+        "tenancy",
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Most dangerous finding in the batch. The findUnique bypass at lines 176-186 allows cross-tenant reads on all 13 household-scoped models. Fix first; task-002 tests must depend on this fix being in place."
+    },
+    {
+      "id": "task-002",
+      "title": "C-002: Rewrite tautological invariant tests and add missing coverage",
+      "type": "test-unit-api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [
+        "task-001"
+      ],
+      "acceptance": [
+        "No if (!threw) … else patterns remain in invariant tests; all cross-tenant assertions use expect(...).rejects.",
+        "pnpm --filter api test -- --coverage runs and emits v8 coverage report with lines/branches thresholds at 60 enforced across all three workspace vitest.config.ts files.",
+        "New test files exist: soft-delete/middleware-filter.test.ts (deleted row filtered from findMany), idempotency/expired-key-replay.test.ts (expired key causes handler re-run), tenancy/nullable-tenant.test.ts, and hmacRefresh cases in security/hashing.test.ts."
+      ],
+      "affects": [
+        "apps/api/test/tenancy/middleware-invariants.test.ts",
+        "apps/api/test/security/hashing.test.ts",
+        "apps/api/test/idempotency/interceptor.test.ts",
+        "apps/api/test/soft-delete/middleware-filter.test.ts",
+        "apps/api/test/tenancy/nullable-tenant.test.ts",
+        "apps/api/vitest.config.ts",
+        "apps/web/vitest.config.ts",
+        "apps/mobile/vitest.config.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Depends on task-001 so tests can assert the tenancy fix actually works. Coverage thresholds added here are enforced by CI after task-014 adds the root pnpm test script."
+    },
+    {
+      "id": "task-003",
+      "title": "C-003: NestJS bootstrap, env validation, and logging hygiene",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "SIGTERM triggers onModuleDestroy (verifiable via boot log 'Prisma disconnected'); request body > 1 MB returns 413; boot fails fast if WEB_URL is missing or non-URL.",
+        "No console.log/console.error calls exist in apps/api/src/** (enforced by lint rule); crossTenant log entries are at debug level with no stack field.",
+        "Production stack traces never appear in API responses or info-level logs (http-exception.filter.ts gates stack logging behind NODE_ENV !== 'production')."
+      ],
+      "affects": [
+        "apps/api/src/main.ts",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/config/env.schema.ts",
+        "apps/api/src/prisma/prisma.service.ts",
+        "apps/api/src/households/households.service.ts",
+        "apps/api/src/common/http-exception.filter.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "task-008 (correlation ID) depends on this being merged first because request-context middleware needs the DI-aware setup established here."
+    },
+    {
+      "id": "task-004a",
+      "title": "C-004 (API): Fix error envelope leakage — filter logging, storage scrubbing, Zod code, raw throws",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "All 5xx responses are logged with level=error and correlation ID; storage error responses contain only { op } in details with raw S3 message logged server-side only.",
+        "Zod validation responses carry code: 'VALIDATION_ERROR'; grep -r 'throw new Error' apps/api/src returns no matches in domain services (bills/cycle.ts, transfers/transfers.service.ts replaced with AppError).",
+        "Email-change OTP and auth OTP share the AUTH_OTP_* code namespace."
+      ],
+      "affects": [
+        "apps/api/src/common/http-exception.filter.ts",
+        "apps/api/src/storage/storage.service.ts",
+        "apps/api/src/common/zod-validation.pipe.ts",
+        "apps/api/src/bills/cycle.ts",
+        "apps/api/src/transfers/transfers.service.ts",
+        "apps/api/src/email-change/email-change.service.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Split from C-004 — this is the API half. Web half is task-004b. No dep on task-004b; both can run in parallel."
+    },
+    {
+      "id": "task-004b",
+      "title": "C-004 (Web): Fix auth UI reading error.message instead of error.code",
+      "type": "web",
+      "assignee": "frontend-react",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "Web auth UI branches on (error as ApiRequestError).code and selects localized strings; it never renders the raw server message field.",
+        "Unknown error codes show a generic localized fallback string.",
+        "Vitest or Playwright test asserts localized message renders for at least two known codes and that generic fallback renders for an unknown code."
+      ],
+      "affects": [
+        "apps/web/src/routes/auth.tsx"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Narrow jarvis-react spot-check on apps/web/src/routes/auth.tsx is sufficient at re-review; full react re-audit not required."
+    },
+    {
+      "id": "task-005",
+      "title": "C-005 + C-012: Fix Liquibase rollback correctness and changeset hygiene",
+      "type": "db",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "liquibase rollbackCount 2 against a populated DB succeeds without type-mismatch or unique-constraint errors; rollback YAML for the idempotency changeset contains an explicit data-loss comment.",
+        "Forward addColumn request_hash is idempotent — columnNotExists precondition guards re-run; DEFAULT '' removed from the column definition.",
+        "Idempotency changeset contains only idempotency-related operations; sessions/email_change_requests truncations are extracted to a new standalone changeset (20260501-001a) with rollback no-op and data-loss comment."
+      ],
+      "affects": [
+        "db/liquibase/changesets/20260501-001-phase-11-hardening-idempotency.yaml",
+        "db/liquibase/changesets/20260501-002-phase-11-drop-response-hash.yaml",
+        "db/liquibase/changesets/20260501-001a-phase-11-truncate-stale-sessions.yaml"
+      ],
+      "trips_gates": [
+        "schema"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "C-012 merged into this task — both touch the same changeset file. task-001a (new file) is the extracted truncation changeset created here."
+    },
+    {
+      "id": "task-006",
+      "title": "C-006: Add idempotency plumbing to createHousehold client wrapper and hook",
+      "type": "shared-core",
+      "assignee": "frontend-react",
+      "status": "done",
+      "dependsOn": [
+        "task-001"
+      ],
+      "acceptance": [
+        "useCreateHousehold mutation auto-generates an idempotency key on each invocation via onMutate: ensureKey.",
+        "Replay of the same (userId, key) returns the cached response without creating a second household row.",
+        "Web e2e test asserts double-submit of household creation produces exactly one household row in the DB."
+      ],
+      "affects": [
+        "packages/core/src/api/client.ts",
+        "packages/core/src/hooks/auth.ts"
+      ],
+      "trips_gates": [
+        "idempotency",
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "packages/core is consumed first by web in this case; assignee is frontend-react. Depends on task-001 because the household creation path must be tenancy-clean before idempotency semantics are meaningful."
+    },
+    {
+      "id": "task-007",
+      "title": "C-007: Security hardening — HSTS, trust proxy, OTP throttle atomicity, invite-token HMAC",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "Production response headers include Strict-Transport-Security; throttler reads correct client IP behind a proxy (test sending x-forwarded-for header verifies correct IP extraction).",
+        "Concurrent OTP-request test cannot produce more accepted OTPs than the per-email rate limit allows (atomic upsert/advisory-lock pattern verified).",
+        "Invite tokens are stored as HMAC (hmacRefresh or dedicated hmacInviteToken); a DB-only attacker cannot forge a valid token."
+      ],
+      "affects": [
+        "apps/api/src/main.ts",
+        "apps/api/src/auth/auth.service.ts",
+        "apps/api/src/auth/throttler-ip.guard.ts",
+        "apps/api/src/households/households.service.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "No deps — security primitives are self-contained. HSTS gated behind NODE_ENV === production check."
+    },
+    {
+      "id": "task-008",
+      "title": "C-008: Correlation ID propagation, DI-aware pipe/filter, dead throttler bucket, Redis throttler",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [
+        "task-003"
+      ],
+      "acceptance": [
+        "ZodValidationPipe and HttpExceptionFilter are registered via APP_PIPE/APP_FILTER providers and receive injected Logger/ConfigService instances.",
+        "Every API response carries x-correlation-id header; structured logs include the correlation ID for every request.",
+        "The dead global throttler bucket is removed; throttler storage is Redis-backed in non-test environments or the single-pod constraint is documented in decisions.md."
+      ],
+      "affects": [
+        "apps/api/src/app.module.ts",
+        "apps/api/src/common/request-context.middleware.ts",
+        "apps/api/src/auth/throttler-ip.guard.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Depends on task-003 because the DI-aware filter setup builds on the logging/ConfigService groundwork laid there."
+    },
+    {
+      "id": "task-009a",
+      "title": "C-009 (API): Fix idempotency liveAndCache fire-and-forget race condition",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "liveAndCache inserts an in-flight marker row before handler execution (or wraps handler + cache write in a single transaction with unique-constraint catch).",
+        "Concurrent-request test confirms only one handler execution occurs per (userId, key) even under parallel load."
+      ],
+      "affects": [
+        "apps/api/src/idempotency/interceptor.ts"
+      ],
+      "trips_gates": [
+        "idempotency",
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Race fix is backend-only and has no contract dependency. OpenAPI enum update is task-009b."
+    },
+    {
+      "id": "task-009b",
+      "title": "C-009 (Contract): Add IDEMPOTENCY_KEY_INVALID to OpenAPI ErrorCode enum and regen client",
+      "type": "contract",
+      "assignee": "api-contract",
+      "status": "done",
+      "dependsOn": [
+        "task-009a"
+      ],
+      "acceptance": [
+        "IDEMPOTENCY_KEY_INVALID is present in the ErrorCode enum in packages/contracts/openapi.yaml.",
+        "Generated TypeScript client recognizes IDEMPOTENCY_KEY_INVALID as a typed error code value."
+      ],
+      "affects": [
+        "packages/contracts/openapi.yaml",
+        "packages/contracts/src/generated/"
+      ],
+      "trips_gates": [
+        "contract"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Depends on task-009a so the backend implementation and contract stay in sync."
+    },
+    {
+      "id": "task-010",
+      "title": "C-010: Audit trail — EventType registry, missing audit columns, dropped user events",
+      "type": "domain",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "All prisma.event.create calls in apps/api/src use EventType constants from packages/core/src/events/types.ts — enforced by TypeScript compile-time check or lint rule.",
+        "New Liquibase changeset adds updated_by to bill_payments and attachments, and deleted_at/created_by/updated_by to loan_lump_sums; columns are NULLable (no backfill required).",
+        "recordUserEvent persists user-scoped events (e.g. user.email_changed) without a householdId instead of dropping them; test asserts event is recorded for a user with no household membership."
+      ],
+      "affects": [
+        "packages/core/src/events/types.ts",
+        "apps/api/src/audit/audit.service.ts",
+        "apps/api/src/email-change/email-change.service.ts",
+        "db/liquibase/changesets/20260501-004-phase-11-audit-columns.yaml"
+      ],
+      "trips_gates": [
+        "schema",
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Eight service files emitting events need updating to use EventType constants — full list in originating audit findings. New file packages/core/src/events/types.ts is shared-core but backend-nest owns it in this fix since the primary consumer is the API."
+    },
+    {
+      "id": "task-011",
+      "title": "C-011: Add hot-path indexes for transactions and FK columns",
+      "type": "db",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "New Liquibase changeset 20260501-003-phase-11-indexes.yaml adds indexes on transactions(account_id), transactions(category_id), transactions(household_id, occurred_at DESC), bill_payments(transaction_id), and budget_threshold_notifications(notification_id).",
+        "EXPLAIN on the canonical transactions list query shows the composite (household_id, occurred_at) index being used.",
+        "Forward apply and rollbackCount 1 both succeed without error."
+      ],
+      "affects": [
+        "db/liquibase/changesets/20260501-003-phase-11-indexes.yaml"
+      ],
+      "trips_gates": [
+        "schema"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Standalone changeset with no deps. Small and safe to parallelize with all other tasks."
+    },
+    {
+      "id": "task-013",
+      "title": "C-013: Remove OTP security-reset oracle and crossHousehold flag from anonymous wrapper",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "verifyOtpForSecurity returns AUTH_OTP_INVALID with no details field distinguishing too_many_attempts from wrong-code — no binary oracle remains.",
+        "The verifyOtpForSecurity client wrapper in packages/core/src/api/client.ts does not declare crossHousehold: true."
+      ],
+      "affects": [
+        "apps/api/src/auth/auth.service.ts",
+        "packages/core/src/api/client.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "The client.ts change is minimal — remove one flag. The API change is also small — remove the reason field from the error details object."
+    },
+    {
+      "id": "task-014",
+      "title": "C-014: Add root pnpm test script and canonicalize/random utility coverage",
+      "type": "test-unit-api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [
+        "task-002"
+      ],
+      "acceptance": [
+        "pnpm test from repo root runs all workspace test suites (root package.json has 'test': 'pnpm -r test').",
+        "New test files exist: apps/api/test/idempotency/canonicalize.test.ts (covering canonicalize and canonicalJSON) and apps/api/test/security/random.test.ts (covering randomOtp and randomToken).",
+        "No 'as any' casts remain in test files under apps/api/test/audit/**; MailService stubs are typed against the interface."
+      ],
+      "affects": [
+        "package.json",
+        "apps/api/test/audit/audit.test.ts",
+        "apps/api/test/idempotency/canonicalize.test.ts",
+        "apps/api/test/security/random.test.ts"
+      ],
+      "trips_gates": [
+        "coverage"
+      ],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Depends on task-002 so the coverage thresholds are in place before the root script wires everything together and CI starts enforcing them end-to-end."
+    },
+    {
+      "id": "task-015",
+      "title": "C-015: Record deferred architectural decisions in decisions.md",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "done",
+      "dependsOn": [],
+      "acceptance": [
+        "decisions.md records the open @CurrentUser shape question (active-household resolution at JWT layer vs. per-request context middleware) with an assigned owner and target resolution date.",
+        "decisions.md records the crossTenant() proxy semantics question (bare PrismaClient vs. extended Proxy) with rationale and owner."
+      ],
+      "affects": [
+        ".prometheus/phase-11-hardening-fix/decisions.md"
+      ],
+      "trips_gates": [],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "No code change — decisions.md append only. No deps. Surfaces architectural questions to the lead for resolution before next sprint."
+    },
+    {
+      "id": "task-016",
+      "title": "Deferred cleanup: batch MINORs and SUGGESTIONs from Phase 11 review",
+      "type": "api",
+      "assignee": "backend-nest",
+      "status": "todo",
+      "dependsOn": [
+        "task-001",
+        "task-002",
+        "task-003",
+        "task-004a",
+        "task-004b",
+        "task-005",
+        "task-006",
+        "task-007",
+        "task-008",
+        "task-009a",
+        "task-009b",
+        "task-010",
+        "task-011",
+        "task-013",
+        "task-014"
+      ],
+      "acceptance": [
+        "All 20 MINOR findings from the Phase 11 review source report are addressed or explicitly accepted-as-wontfix with rationale.",
+        "All 7 SUGGESTION findings are reviewed and either implemented, tracked, or documented as out-of-scope."
+      ],
+      "affects": [],
+      "trips_gates": [],
+      "retry_count": 0,
+      "evidence": "",
+      "notes": "Running — user requested all valid MINORs be fixed."
+    }
+  ]
+}

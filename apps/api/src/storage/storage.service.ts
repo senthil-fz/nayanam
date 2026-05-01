@@ -9,6 +9,7 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { ConfigService } from '@nestjs/config';
 import { Errors } from '../common/errors';
 
 /**
@@ -26,24 +27,28 @@ export class StorageService implements OnModuleInit {
   private readonly client: S3Client;
   private readonly bucket: string;
 
-  constructor() {
-    const region = process.env.S3_REGION ?? 'us-east-1';
-    const endpoint = process.env.S3_ENDPOINT?.trim();
-    const accessKeyId = process.env.S3_ACCESS_KEY ?? '';
-    const secretAccessKey = process.env.S3_SECRET_KEY ?? '';
-    const forcePathStyleEnv = (process.env.S3_FORCE_PATH_STYLE ?? 'true').toLowerCase();
+  constructor(private readonly config: ConfigService) {
+    // Boot-time env validation (config/env.schema.ts) guarantees these are
+    // present and non-empty; `getOrThrow` documents that intent at the callsite.
+    const region = this.config.getOrThrow<string>('S3_REGION');
+    const endpoint = this.config.getOrThrow<string>('S3_ENDPOINT').trim();
+    const accessKeyId = this.config.getOrThrow<string>('S3_ACCESS_KEY');
+    const secretAccessKey = this.config.getOrThrow<string>('S3_SECRET_KEY');
+    const forcePathStyleEnv = this.config
+      .getOrThrow<string>('S3_FORCE_PATH_STYLE')
+      .toLowerCase();
     const forcePathStyle = forcePathStyleEnv === 'true' || forcePathStyleEnv === '1';
 
-    this.bucket = process.env.S3_BUCKET ?? 'nayanam-attachments';
+    this.bucket = this.config.getOrThrow<string>('S3_BUCKET');
     this.client = new S3Client({
       region,
-      credentials: accessKeyId && secretAccessKey ? { accessKeyId, secretAccessKey } : undefined,
+      credentials: { accessKeyId, secretAccessKey },
       ...(endpoint ? { endpoint, forcePathStyle } : {}),
     });
   }
 
   async onModuleInit() {
-    if (process.env.NODE_ENV === 'production') return;
+    if (this.config.getOrThrow<string>('NODE_ENV') === 'production') return;
     await this.ensureBucket();
   }
 
@@ -90,7 +95,11 @@ export class StorageService implements OnModuleInit {
         expiresAt: new Date(Date.now() + expiresInSec * 1000),
       };
     } catch (err) {
-      throw Errors.storageUnavailable({ op: 'presignPut', cause: String(err) });
+      this.logger.error(
+        { op: 'presignPut', cause: err instanceof Error ? err.message : String(err) },
+        'Storage operation failed',
+      );
+      throw Errors.storageUnavailable({ op: 'presignPut' });
     }
   }
 
@@ -102,7 +111,11 @@ export class StorageService implements OnModuleInit {
         { expiresIn: expiresInSec },
       );
     } catch (err) {
-      throw Errors.storageUnavailable({ op: 'presignGet', cause: String(err) });
+      this.logger.error(
+        { op: 'presignGet', cause: err instanceof Error ? err.message : String(err) },
+        'Storage operation failed',
+      );
+      throw Errors.storageUnavailable({ op: 'presignGet' });
     }
   }
 
@@ -123,7 +136,11 @@ export class StorageService implements OnModuleInit {
       };
     } catch (err) {
       if (isNotFoundError(err)) return null;
-      throw Errors.storageUnavailable({ op: 'headObject', cause: String(err) });
+      this.logger.error(
+        { op: 'headObject', cause: err instanceof Error ? err.message : String(err) },
+        'Storage operation failed',
+      );
+      throw Errors.storageUnavailable({ op: 'headObject' });
     }
   }
 
@@ -144,7 +161,11 @@ export class StorageService implements OnModuleInit {
         new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: buf, ContentType: mime }),
       );
     } catch (err) {
-      throw Errors.storageUnavailable({ op: 'uploadBuffer', cause: String(err) });
+      this.logger.error(
+        { op: 'uploadBuffer', cause: err instanceof Error ? err.message : String(err) },
+        'Storage operation failed',
+      );
+      throw Errors.storageUnavailable({ op: 'uploadBuffer' });
     }
   }
 
@@ -163,7 +184,11 @@ export class StorageService implements OnModuleInit {
       }
       return Buffer.concat(chunks);
     } catch (err) {
-      throw Errors.storageUnavailable({ op: 'getObjectBytes', cause: String(err) });
+      this.logger.error(
+        { op: 'getObjectBytes', cause: err instanceof Error ? err.message : String(err) },
+        'Storage operation failed',
+      );
+      throw Errors.storageUnavailable({ op: 'getObjectBytes' });
     }
   }
 }

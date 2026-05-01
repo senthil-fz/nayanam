@@ -188,6 +188,9 @@ model Transaction {
   transfer   Transfer?     @relation(fields: [transferId], references: [id])
   billPayments BillPayment[]
 
+  @@index([accountId], map: "idx_transactions_account_id")
+  @@index([categoryId], map: "idx_transactions_category_id")
+  @@index([householdId, occurredAt(sort: Desc)], map: "idx_transactions_household_occurred")
   @@map("transactions")
 }
 
@@ -286,18 +289,20 @@ model NotificationToken {
 }
 
 model IdempotencyKey {
-  key          String   @id
+  key          String
   userId       String   @map("user_id") @db.VarChar(26)
   method       String
   path         String
   statusCode   Int      @map("status_code")
-  responseHash String   @map("response_hash")
+  requestHash  String   @map("request_hash") @db.Char(64)
   responseBody Json     @map("response_body")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@id([userId, key])
+  @@index([createdAt], map: "idx_idempotency_keys_created_at")
   @@map("idempotency_keys")
 }
 
@@ -369,6 +374,7 @@ model BillPayment {
   source        String
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
   createdBy     String?   @map("created_by") @db.VarChar(26)
+  updatedBy     String?   @map("updated_by") @db.VarChar(26)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   household   Household    @relation(fields: [householdId], references: [id])
@@ -376,6 +382,7 @@ model BillPayment {
   transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([householdId, billId, cycleDueAt(sort: Desc)], map: "idx_bill_payments_bill_cycle")
+  @@index([transactionId], map: "idx_bill_payments_transaction_id")
   @@map("bill_payments")
 }
 
@@ -425,6 +432,7 @@ model BudgetThresholdNotification {
 
   @@unique([budgetId, periodStart, thresholdPercent], map: "ux_btn_budget_period_threshold")
   @@index([householdId, periodStart(sort: Desc)], map: "idx_btn_household_period")
+  @@index([notificationId], map: "idx_budget_threshold_notifications_notification_id")
   @@map("budget_threshold_notifications")
 }
 
@@ -442,6 +450,7 @@ model Attachment {
   height           Int?
   status           String    @default("PENDING")
   createdBy        String    @map("created_by") @db.VarChar(26)
+  updatedBy        String?   @map("updated_by") @db.VarChar(26)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
@@ -537,14 +546,17 @@ model Loan {
 }
 
 model LoanLumpSum {
-  id              String   @id @db.VarChar(26)
-  householdId     String   @map("household_id") @db.VarChar(26)
-  loanId          String   @map("loan_id") @db.VarChar(26)
-  amountMinor     BigInt   @map("amount_minor")
-  appliedAtMonth  Int      @map("applied_at_month")
+  id              String    @id @db.VarChar(26)
+  householdId     String    @map("household_id") @db.VarChar(26)
+  loanId          String    @map("loan_id") @db.VarChar(26)
+  amountMinor     BigInt    @map("amount_minor")
+  appliedAtMonth  Int       @map("applied_at_month")
   note            String?
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.VarChar(26)
+  updatedBy       String?   @map("updated_by") @db.VarChar(26)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   household Household @relation(fields: [householdId], references: [id])
   loan      Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)

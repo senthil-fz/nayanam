@@ -11,7 +11,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { AttachmentsService } from './attachments.service';
@@ -22,7 +21,7 @@ import {
 } from './attachments.dto';
 
 @Controller({ path: 'attachments', version: '1' })
-@UseGuards(JwtAuthGuard, HouseholdHeaderGuard)
+@UseGuards(HouseholdHeaderGuard)
 export class AttachmentsController {
   constructor(private readonly svc: AttachmentsService) {}
 

@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
-import { randomOtp, sha256Hex } from '../common/hash';
+import { hmacOtp, randomOtp, timingSafeEqualHex } from '../common/hash';
+import { maskEmail } from '../common/email-mask';
+import { recordUserEvent } from './me.service';
 
 const OTP_TTL_SECONDS = 600;
 const COOLDOWN_SECONDS = 60;
@@ -43,33 +46,38 @@ export class EmailChangeService {
     }
 
     const code = randomOtp();
-    const otpHash = sha256Hex(code);
+    const otpHash = hmacOtp(code);
     const now = new Date();
     const expiresAt = new Date(now.getTime() + OTP_TTL_SECONDS * 1000);
 
-    if (pending) {
-      await this.prisma.emailChangeRequest.update({
-        where: { id: pending.id },
-        data: {
-          newEmail,
-          otpHash,
-          expiresAt,
-          lastSentAt: now,
-          failedAttempts: 0,
-        },
+    await this.prisma.$transaction(async (tx) => {
+      if (pending) {
+        await tx.emailChangeRequest.update({
+          where: { id: pending.id },
+          data: {
+            newEmail,
+            otpHash,
+            expiresAt,
+            lastSentAt: now,
+            failedAttempts: 0,
+          },
+        });
+      } else {
+        await tx.emailChangeRequest.create({
+          data: {
+            id: newId(),
+            userId,
+            newEmail,
+            otpHash,
+            expiresAt,
+            lastSentAt: now,
+          },
+        });
+      }
+      await recordUserEvent(tx, userId, null, EventType.USER_EMAIL_CHANGE_REQUESTED, {
+        maskedEmail: maskEmail(newEmail),
       });
-    } else {
-      await this.prisma.emailChangeRequest.create({
-        data: {
-          id: newId(),
-          userId,
-          newEmail,
-          otpHash,
-          expiresAt,
-          lastSentAt: now,
-        },
-      });
-    }
+    });
 
     await this.mail.sendEmailChangeOtp(newEmail, code);
 
@@ -86,15 +94,15 @@ export class EmailChangeService {
     });
     if (!pending) throw Errors.emailChangeNotPending();
 
-    if (pending.expiresAt.getTime() < Date.now()) throw Errors.otpExpired();
-    if (pending.failedAttempts >= MAX_ATTEMPTS) throw Errors.otpMaxAttempts();
+    if (pending.expiresAt.getTime() < Date.now()) throw Errors.authOtpInvalid();
+    if (pending.failedAttempts >= MAX_ATTEMPTS) throw Errors.authOtpInvalid();
 
-    if (pending.otpHash !== sha256Hex(otp)) {
+    if (!timingSafeEqualHex(pending.otpHash, hmacOtp(otp))) {
       await this.prisma.emailChangeRequest.update({
         where: { id: pending.id },
         data: { failedAttempts: { increment: 1 } },
       });
-      throw Errors.otpInvalid();
+      throw Errors.authOtpInvalid();
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -110,6 +118,10 @@ export class EmailChangeService {
         await tx.emailChangeRequest.update({
           where: { id: pending.id },
           data: { consumedAt: new Date() },
+        });
+        await recordUserEvent(tx, userId, null, EventType.USER_EMAIL_CHANGED, {
+          oldEmailMasked: maskEmail(oldEmail),
+          newEmailMasked: maskEmail(pending.newEmail),
         });
       });
     } catch (err: unknown) {
@@ -132,11 +144,4 @@ export class EmailChangeService {
       newEmailMasked: maskEmail(pending.newEmail),
     };
   }
-}
-
-export function maskEmail(email: string): string {
-  const [local, domain] = email.split('@', 2);
-  if (!local || !domain) return '***';
-  const head = local.slice(0, 1);
-  return `${head}${'*'.repeat(Math.max(1, local.length - 1))}@${domain}`;
 }

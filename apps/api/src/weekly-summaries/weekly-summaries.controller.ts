@@ -1,11 +1,9 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Controller, Get, Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthContext } from '../common/context';
 import { WeeklySummariesService } from './weekly-summaries.service';
 
 @Controller({ path: 'weekly-summaries', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class WeeklySummariesController {
   constructor(private readonly svc: WeeklySummariesService) {}
 

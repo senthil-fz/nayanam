@@ -1,0 +1,21 @@
+{
+  "mode": "platform-all",
+  "base": "(no diff — path map)",
+  "phases_in_scope": "0..10",
+  "stages": {
+    "react": ["apps/web/**/*.ts", "apps/web/**/*.tsx", "packages/core/src/**/*.ts"],
+    "nestjs": ["apps/api/src/**/*.ts", "apps/api/src/main.ts", "apps/api/src/app.module.ts"],
+    "expo": ["apps/mobile/**/*.ts", "apps/mobile/**/*.tsx", "apps/mobile/app/**", "apps/mobile/src/**"],
+    "db": ["apps/api/prisma/schema.prisma", "db/liquibase/changelogs/**"],
+    "contract": ["packages/contracts/openapi.yaml", "packages/contracts/src/**", "apps/api/src/**/*.controller.ts", "apps/api/src/**/*.dto.ts", "apps/web/src/lib/api.ts", "apps/mobile/src/lib/api.ts"],
+    "errors": ["apps/api/src/common/errors.ts", "apps/api/src/common/http-exception.filter.ts"],
+    "security": ["apps/api/src/main.ts", "apps/api/src/auth/**", "apps/api/src/common/**", "apps/web/src/lib/api.ts", "apps/mobile/src/lib/api.ts", "packages/core/src/api/client.ts", "packages/core/src/stores/auth.ts"],
+    "tenancy": ["apps/api/src/prisma/prisma.service.ts", "apps/api/src/prisma/prisma.module.ts", "apps/api/src/common/context.ts", "apps/api/src/common/context.middleware.ts", "apps/api/src/common/household-header.guard.ts", "apps/api/src/**/*.service.ts", "apps/api/src/**/*.controller.ts", "apps/api/prisma/schema.prisma"],
+    "money": ["apps/api/prisma/schema.prisma", "packages/contracts/openapi.yaml", "apps/api/src/common/currencies.ts", "apps/api/src/**/*.service.ts", "apps/api/src/**/*.dto.ts", "packages/core/src/accounts/currency.ts", "packages/core/src/**/format.ts", "apps/web/src/features/**/format.ts", "apps/mobile/src/features/**/format.ts", "apps/api/src/loans/amortization.ts", "apps/api/src/accounts/balance.service.ts", "apps/api/src/budgets/spent.ts"],
+    "idempotency": ["packages/contracts/openapi.yaml", "apps/api/src/common/idempotency.interceptor.ts", "apps/api/src/**/*.controller.ts", "packages/core/src/api/client.ts", "apps/web/src/lib/api.ts", "apps/mobile/src/lib/api.ts"],
+    "audit": ["apps/api/prisma/schema.prisma", "apps/api/src/prisma/prisma.service.ts", "apps/api/src/notifications/**", "apps/api/src/**/*.service.ts"],
+    "parity": ["apps/web/src/routes/**", "apps/web/src/features/**", "apps/mobile/app/**", "apps/mobile/src/features/**", "packages/core/src/**"],
+    "unit-tests": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/vitest.config.*"],
+    "e2e-tests": ["apps/api/test/e2e/**", "apps/web/e2e/**", "apps/mobile/.maestro/**"]
+  }
+}

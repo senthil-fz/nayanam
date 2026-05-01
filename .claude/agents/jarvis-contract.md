@@ -2,7 +2,7 @@
 name: jarvis-contract
 description: Reviews the OpenAPI contract (packages/contracts/openapi.yaml), the generated TS client (packages/contracts/src/generated/), and parity between the spec, NestJS controllers/DTOs, and both web/mobile callsites. Enforces the spec-as-source-of-truth rule from CLAUDE.md. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: cyan
 ---
 

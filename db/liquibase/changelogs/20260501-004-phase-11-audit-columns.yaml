@@ -1,0 +1,110 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-004-001-bill-payments-updated-by
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - columnNotExists:
+            tableName: bill_payments
+            columnName: updated_by
+      changes:
+        - addColumn:
+            tableName: bill_payments
+            columns:
+              - column:
+                  name: updated_by
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: bill_payments
+            columnName: updated_by
+
+  - changeSet:
+      id: 20260501-004-002-attachments-updated-by
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - columnNotExists:
+            tableName: attachments
+            columnName: updated_by
+      changes:
+        - addColumn:
+            tableName: attachments
+            columns:
+              - column:
+                  name: updated_by
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: attachments
+            columnName: updated_by
+
+  - changeSet:
+      id: 20260501-004-003-loan-lump-sums-deleted-at
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - columnNotExists:
+            tableName: loan_lump_sums
+            columnName: deleted_at
+      changes:
+        - addColumn:
+            tableName: loan_lump_sums
+            columns:
+              - column:
+                  name: deleted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: loan_lump_sums
+            columnName: deleted_at
+
+  - changeSet:
+      id: 20260501-004-004-loan-lump-sums-created-by
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - columnNotExists:
+            tableName: loan_lump_sums
+            columnName: created_by
+      changes:
+        - addColumn:
+            tableName: loan_lump_sums
+            columns:
+              - column:
+                  name: created_by
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: loan_lump_sums
+            columnName: created_by
+
+  - changeSet:
+      id: 20260501-004-005-loan-lump-sums-updated-by
+      author: backend-nest
+      preConditions:
+        - onFail: MARK_RAN
+        - columnNotExists:
+            tableName: loan_lump_sums
+            columnName: updated_by
+      changes:
+        - addColumn:
+            tableName: loan_lump_sums
+            columns:
+              - column:
+                  name: updated_by
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: loan_lump_sums
+            columnName: updated_by

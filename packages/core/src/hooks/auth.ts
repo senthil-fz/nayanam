@@ -2,6 +2,37 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApiClient } from '../api/client';
 import type { AuthStore } from '../stores/auth';
 
+function genIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idk-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function ensureKey<V extends { idempotencyKey?: string }>(vars: V): V {
+  if (!vars.idempotencyKey) vars.idempotencyKey = genIdempotencyKey();
+  return vars;
+}
+
+export type RequestOtpVars = { email: string; idempotencyKey?: string };
+export type VerifyOtpVars = {
+  email: string;
+  code: string;
+  idempotencyKey?: string;
+};
+export type CreateHouseholdVars = {
+  name: string;
+  defaultCurrencyCode?: string;
+  idempotencyKey?: string;
+};
+export type AcceptInviteVars = { token: string; idempotencyKey?: string };
+export type CreateInviteVars = {
+  email: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+  idempotencyKey?: string;
+};
+export type RevokeInviteVars = { inviteId: string; idempotencyKey?: string };
+
 export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
   function useMe() {
     const accessToken = useAuthStore((s) => s.accessToken);
@@ -15,7 +46,16 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
 
   function useRequestOtp() {
     return useMutation({
-      mutationFn: (email: string) => client.authOtpRequest(email),
+      onMutate: (vars: RequestOtpVars | string) => {
+        const v: RequestOtpVars =
+          typeof vars === 'string' ? { email: vars } : { ...vars };
+        return ensureKey<RequestOtpVars>(v);
+      },
+      mutationFn: (vars: RequestOtpVars | string) => {
+        const v: RequestOtpVars =
+          typeof vars === 'string' ? { email: vars } : vars;
+        return client.authOtpRequest(v.email, v.idempotencyKey);
+      },
     });
   }
 
@@ -23,8 +63,9 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
     const setSession = useAuthStore((s) => s.setSession);
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: ({ email, code }: { email: string; code: string }) =>
-        client.authOtpVerify(email, code),
+      onMutate: ensureKey<VerifyOtpVars>,
+      mutationFn: (vars: VerifyOtpVars) =>
+        client.authOtpVerify(vars.email, vars.code, vars.idempotencyKey),
       onSuccess: (data) => {
         setSession({
           user: data.user,
@@ -44,7 +85,9 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
     const clear = useAuthStore((s) => s.clear);
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: () => client.authLogout(),
+      // Logout always auto-generates its own key. Callsites do `logout.mutate()`
+      // with no args, so the variable type must be `void`.
+      mutationFn: () => client.authLogout(genIdempotencyKey()),
       onSettled: () => {
         clear();
         qc.clear();
@@ -65,8 +108,11 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
   function useCreateHousehold() {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (body: { name: string; defaultCurrencyCode?: string }) =>
-        client.createHousehold(body),
+      onMutate: ensureKey<CreateHouseholdVars>,
+      mutationFn: (vars: CreateHouseholdVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.createHousehold(body, idempotencyKey);
+      },
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: ['households'] });
         void qc.invalidateQueries({ queryKey: ['me'] });
@@ -77,7 +123,16 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
   function useAcceptInvite() {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (token: string) => client.acceptInvite(token),
+      onMutate: (vars: AcceptInviteVars | string) => {
+        const v: AcceptInviteVars =
+          typeof vars === 'string' ? { token: vars } : { ...vars };
+        return ensureKey<AcceptInviteVars>(v);
+      },
+      mutationFn: (vars: AcceptInviteVars | string) => {
+        const v: AcceptInviteVars =
+          typeof vars === 'string' ? { token: vars } : vars;
+        return client.acceptInvite(v.token, v.idempotencyKey);
+      },
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: ['households'] });
         void qc.invalidateQueries({ queryKey: ['me'] });
@@ -104,8 +159,11 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
   function useCreateInvite(householdId: string | null) {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (body: { email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' }) =>
-        client.createInvite(householdId!, body),
+      onMutate: ensureKey<CreateInviteVars>,
+      mutationFn: (vars: CreateInviteVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.createInvite(householdId!, body, idempotencyKey);
+      },
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: ['households', householdId, 'invites'] });
       },
@@ -115,7 +173,16 @@ export function makeAuthHooks(client: ApiClient, useAuthStore: AuthStore) {
   function useRevokeInvite(householdId: string | null) {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: (inviteId: string) => client.revokeInvite(householdId!, inviteId),
+      onMutate: (vars: RevokeInviteVars | string) => {
+        const v: RevokeInviteVars =
+          typeof vars === 'string' ? { inviteId: vars } : { ...vars };
+        return ensureKey<RevokeInviteVars>(v);
+      },
+      mutationFn: (vars: RevokeInviteVars | string) => {
+        const v: RevokeInviteVars =
+          typeof vars === 'string' ? { inviteId: vars } : vars;
+        return client.revokeInvite(householdId!, v.inviteId, v.idempotencyKey);
+      },
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: ['households', householdId, 'invites'] });
       },

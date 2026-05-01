@@ -12,11 +12,17 @@
     "generate": "openapi-typescript openapi.yaml -o src/generated.ts",
     "lint:spec": "redocly lint openapi.yaml",
     "typecheck": "tsc --noEmit",
-    "lint": "pnpm lint:spec"
+    "lint": "pnpm lint:spec",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate": "pnpm lint:spec && pnpm test"
   },
   "devDependencies": {
     "@redocly/cli": "^2.29.2",
     "openapi-typescript": "^7.13.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4",
+    "yaml": "^2.6.1"
   }
 }

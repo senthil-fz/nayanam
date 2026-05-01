@@ -2,7 +2,7 @@
 name: jarvis-unit-tests
 description: Reviews unit-test coverage and quality across api / web / mobile / shared-core. Vitest is the runner everywhere; React UI uses React Testing Library. Enforces invariant tests (cross-household isolation, money currency mismatch, idempotency replay, event-in-transaction) and quality rules. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: purple
 ---
 

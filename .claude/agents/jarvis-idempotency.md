@@ -2,7 +2,7 @@
 name: jarvis-idempotency
 description: Reviews enforcement of the Idempotency-Key invariant — every mutating endpoint accepts the header, the IdempotencyInterceptor stores { key, userId, responseHash, createdAt } with 24h TTL, replays return the cached response, conflicting bodies under the same key return 409. Spans OpenAPI contract, NestJS interceptor/storage, and client retry behavior. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

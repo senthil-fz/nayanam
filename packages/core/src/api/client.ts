@@ -98,6 +98,8 @@ type VerifyPinInput = ApiSchemas['VerifyPinInput'];
 type VerifyPinResponse = ApiSchemas['VerifyPinResponse'];
 type VerifyOtpForSecurityInput = ApiSchemas['VerifyOtpForSecurityInput'];
 type VerifyOtpForSecurityResponse = ApiSchemas['VerifyOtpForSecurityResponse'];
+type ResetPinInput = ApiSchemas['ResetPinInput'];
+type ResetPinResponse = ApiSchemas['ResetPinResponse'];
 type NotificationPreferences = ApiSchemas['NotificationPreferences'];
 type PatchNotificationPreferencesInput =
   ApiSchemas['PatchNotificationPreferencesInput'];
@@ -293,31 +295,38 @@ export function createApiClient(opts: ApiClientOptions) {
 
   return {
     // Auth
-    authOtpRequest: (email: string) =>
+    authOtpRequest: (email: string, idempotencyKey?: string) =>
       request<{ sent: boolean; expiresInSeconds: number }>('/auth/otp/request', {
         method: 'POST',
         body: { email },
         anonymous: true,
+        idempotencyKey,
       }),
-    authOtpVerify: (email: string, code: string) =>
+    authOtpVerify: (email: string, code: string, idempotencyKey?: string) =>
       request<ApiAuthSession>('/auth/otp/verify', {
         method: 'POST',
         body: { email, code },
         anonymous: true,
+        idempotencyKey,
       }),
-    authLogout: () => request<void>('/auth/logout', { method: 'POST' }),
+    authLogout: (idempotencyKey?: string) =>
+      request<void>('/auth/logout', { method: 'POST', idempotencyKey }),
 
     // Me
     getMe: () => request<ApiMe>('/me'),
-    registerPushToken: (body: { platform: 'ios' | 'android' | 'web'; token: string; expoPushToken?: string | null }) =>
-      request<ApiPushToken>('/me/push-tokens', { method: 'POST', body }),
-    deletePushToken: (id: string) => request<void>(`/me/push-tokens/${id}`, { method: 'DELETE' }),
+    registerPushToken: (
+      body: { platform: 'ios' | 'android' | 'web'; token: string; expoPushToken?: string | null },
+      idempotencyKey?: string,
+    ) =>
+      request<ApiPushToken>('/me/push-tokens', { method: 'POST', body, idempotencyKey }),
+    deletePushToken: (id: string, idempotencyKey?: string) =>
+      request<void>(`/me/push-tokens/${id}`, { method: 'DELETE', idempotencyKey }),
 
     // Households (operate across households; no X-Household-Id)
     listHouseholds: () =>
       request<{ items: ApiHouseholdSummary[] }>('/households', { crossHousehold: true }),
-    createHousehold: (body: { name: string; defaultCurrencyCode?: string }) =>
-      request<ApiHousehold>('/households', { method: 'POST', body, crossHousehold: true }),
+    createHousehold: (body: { name: string; defaultCurrencyCode?: string }, idempotencyKey?: string) =>
+      request<ApiHousehold>('/households', { method: 'POST', body, crossHousehold: true, idempotencyKey }),
     getHousehold: (id: string) =>
       request<ApiHousehold>(`/households/${id}`, { crossHousehold: true }),
     updateHousehold: (id: string, body: HouseholdUpdate, idempotencyKey?: string) =>
@@ -408,11 +417,26 @@ export function createApiClient(opts: ApiClientOptions) {
         idempotencyKey,
         crossHousehold: true,
       }),
-    authOtpVerifyForSecurity: (body: VerifyOtpForSecurityInput) =>
+    authOtpVerifyForSecurity: (
+      body: VerifyOtpForSecurityInput,
+      idempotencyKey?: string,
+    ) =>
       request<VerifyOtpForSecurityResponse>(
         '/auth/otp/verify-for-security',
-        { method: 'POST', body, anonymous: true, crossHousehold: true },
+        {
+          method: 'POST',
+          body,
+          anonymous: true,
+          idempotencyKey,
+        },
       ),
+    resetMePin: (body: ResetPinInput, idempotencyKey?: string) =>
+      request<ResetPinResponse>('/me/security/reset-pin', {
+        method: 'POST',
+        body,
+        idempotencyKey,
+        crossHousehold: true,
+      }),
     getNotificationPreferences: () =>
       request<NotificationPreferences>('/me/notification-preferences', {
         crossHousehold: true,
@@ -439,22 +463,29 @@ export function createApiClient(opts: ApiClientOptions) {
       request<{ items: ApiHouseholdMember[] }>(`/households/${id}/members`, { crossHousehold: true }),
     listInvites: (id: string) =>
       request<{ items: ApiHouseholdInvite[] }>(`/households/${id}/invites`, { crossHousehold: true }),
-    createInvite: (id: string, body: { email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' }) =>
+    createInvite: (
+      id: string,
+      body: { email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' },
+      idempotencyKey?: string,
+    ) =>
       request<ApiHouseholdInviteWithToken>(`/households/${id}/invites`, {
         method: 'POST',
         body,
         crossHousehold: true,
+        idempotencyKey,
       }),
-    revokeInvite: (id: string, inviteId: string) =>
+    revokeInvite: (id: string, inviteId: string, idempotencyKey?: string) =>
       request<void>(`/households/${id}/invites/${inviteId}`, {
         method: 'DELETE',
         crossHousehold: true,
+        idempotencyKey,
       }),
-    acceptInvite: (token: string) =>
+    acceptInvite: (token: string, idempotencyKey?: string) =>
       request<ApiHouseholdSummary>('/invites/accept', {
         method: 'POST',
         body: { token },
         crossHousehold: true,
+        idempotencyKey,
       }),
 
     // Accounts (household-scoped; X-Household-Id injected automatically)
@@ -743,10 +774,11 @@ export function createApiClient(opts: ApiClientOptions) {
         idempotencyKey,
       }),
     getLoansSummary: () => request<LoansSummaryResponse>('/loans/summary'),
-    computeLoan: (id: string, body: ComputeLoanInput) =>
+    computeLoan: (id: string, body: ComputeLoanInput, idempotencyKey?: string) =>
       request<ComputeLoanResponse>(`/loans/${id}/compute`, {
         method: 'POST',
         body,
+        idempotencyKey,
       }),
 
     // Stats (read-only; household-scoped via X-Household-Id)

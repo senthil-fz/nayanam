@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { isSupportedCurrency } from '../common/currencies';
+import { getContext } from '../common/context';
 
 const AVATAR_URL_TTL_SEC = 300;
 
@@ -71,17 +74,36 @@ export class MeService {
     }
 
     data.updatedAt = new Date();
-    const updated = await this.prisma.user.update({ where: { id: userId }, data });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({ where: { id: userId }, data });
+      if (changed.includes('name')) {
+        await recordUserEvent(tx, userId, null, EventType.USER_PROFILE_UPDATED, {
+          changedFields: ['name'],
+          before: { name: before.name },
+          after: { name: after.name },
+        });
+      }
+      if (changed.includes('primaryCurrencyCode')) {
+        await recordUserEvent(tx, userId, null, EventType.USER_PRIMARY_CURRENCY_CHANGED, {
+          before: before.primaryCurrencyCode,
+          after: after.primaryCurrencyCode,
+        });
+      }
+      return u;
+    });
     return { profile: await this.serialize(updated), changed, before, after };
   }
 
   /** Resolve the most-recent READY non-deleted avatar for a user. */
   async resolveUserAvatarAttachmentId(userId: string): Promise<string | null> {
+    const ctxHh = getContext()?.householdId ?? null;
+    if (!ctxHh) return null;
     const rows = await this.prisma.$queryRaw<Array<{ id: string; thumb_key: string | null; key: string }>>`
       SELECT id, thumb_key, key
         FROM attachments
        WHERE owner_type = 'user'
          AND owner_id = ${userId}
+         AND household_id = ${ctxHh}
          AND status = 'READY'
          AND deleted_at IS NULL
        ORDER BY created_at DESC
@@ -152,9 +174,16 @@ export class MeService {
   }
 }
 
-/** Small helper to record user.* events (no household scoping needed). */
+/**
+ * Small helper to record user.* events (no household scoping needed).
+ *
+ * MUST be called with a transaction client (`Prisma.TransactionClient`) so the
+ * event row commits/rolls back atomically with the mutation that produced it.
+ * The plain `PrismaService` is also accepted to keep call sites that already
+ * run inside a `$transaction(async tx => …)` block ergonomic.
+ */
 export async function recordUserEvent(
-  prisma: PrismaService,
+  client: Prisma.TransactionClient | PrismaService,
   userId: string,
   householdId: string | null,
   type: string,
@@ -165,11 +194,11 @@ export async function recordUserEvent(
   // row has a valid FK; scheduler-originated events pass null households.
   let hid = householdId;
   if (!hid) {
-    const m = await prisma.householdMember.findFirst({ where: { userId } });
+    const m = await client.householdMember.findFirst({ where: { userId } });
     hid = m?.householdId ?? null;
   }
   if (!hid) return; // User has no household yet — skip the audit row.
-  await prisma.$executeRaw`
+  await client.$executeRaw`
     INSERT INTO events (id, household_id, actor_id, type, payload)
     VALUES (${newId()}, ${hid}, ${userId}, ${type}, ${JSON.stringify(payload)}::jsonb)
   `;

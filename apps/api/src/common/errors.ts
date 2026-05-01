@@ -36,6 +36,28 @@ export const Errors = {
     new AppError('INVITE_EMAIL_MISMATCH', 'Signed-in email does not match the invite.', HttpStatus.FORBIDDEN),
   conflict: (message: string) =>
     new AppError('CONFLICT', message, HttpStatus.CONFLICT),
+  idempotencyConflict: () =>
+    new AppError(
+      'IDEMPOTENCY_CONFLICT',
+      'Idempotency-Key reused with a different request.',
+      HttpStatus.CONFLICT,
+      {
+        hint: 'Request body differs from the original request stored under this idempotency key.',
+      },
+    ),
+  idempotencyKeyInvalid: (details?: Record<string, unknown>) =>
+    new AppError(
+      'IDEMPOTENCY_KEY_INVALID',
+      'Idempotency-Key header must be 8–200 characters.',
+      HttpStatus.BAD_REQUEST,
+      details,
+    ),
+  idempotencyInFlight: () =>
+    new AppError(
+      'IDEMPOTENCY_IN_FLIGHT',
+      'A request with this Idempotency-Key is already being processed. Retry after a moment.',
+      HttpStatus.CONFLICT,
+    ),
   badRequest: (message: string, details?: Record<string, unknown>) =>
     new AppError('BAD_REQUEST', message, HttpStatus.BAD_REQUEST, details),
   notFound: (message = 'Resource not found.') =>

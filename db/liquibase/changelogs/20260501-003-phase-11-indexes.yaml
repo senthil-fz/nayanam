@@ -1,0 +1,91 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-003-phase-11-indexes
+      author: nayanam
+      comment: |
+        Phase 11 — Platform Hardening (TASK-011).
+
+        Adds hot-path indexes for FK columns and the canonical transactions list
+        query. These indexes were omitted during initial table creation and are
+        now being added to cover the highest-traffic query patterns:
+
+          - transactions(account_id)             — filter by account
+          - transactions(category_id)            — filter by category
+          - transactions(household_id, occurred_at DESC) — canonical list query
+          - bill_payments(transaction_id)        — reverse-lookup from transaction
+          - budget_threshold_notifications(notification_id) — reverse-lookup from notification
+
+        Each step is guarded by an indexNotExists precondition for idempotency.
+      changes:
+        - createIndex:
+            tableName: transactions
+            indexName: idx_transactions_account_id
+            columns:
+              - column: { name: account_id }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_transactions_account_id
+
+        - createIndex:
+            tableName: transactions
+            indexName: idx_transactions_category_id
+            columns:
+              - column: { name: category_id }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_transactions_category_id
+
+        - createIndex:
+            tableName: transactions
+            indexName: idx_transactions_household_occurred
+            columns:
+              - column: { name: household_id }
+              - column: { name: occurred_at, descending: true }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_transactions_household_occurred
+
+        - createIndex:
+            tableName: bill_payments
+            indexName: idx_bill_payments_transaction_id
+            columns:
+              - column: { name: transaction_id }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_bill_payments_transaction_id
+
+        - createIndex:
+            tableName: budget_threshold_notifications
+            indexName: idx_budget_threshold_notifications_notification_id
+            columns:
+              - column: { name: notification_id }
+            preConditions:
+              - onFail: MARK_RAN
+              - not:
+                  - indexExists:
+                      indexName: idx_budget_threshold_notifications_notification_id
+
+      rollback:
+        - dropIndex:
+            tableName: budget_threshold_notifications
+            indexName: idx_budget_threshold_notifications_notification_id
+        - dropIndex:
+            tableName: bill_payments
+            indexName: idx_bill_payments_transaction_id
+        - dropIndex:
+            tableName: transactions
+            indexName: idx_transactions_household_occurred
+        - dropIndex:
+            tableName: transactions
+            indexName: idx_transactions_category_id
+        - dropIndex:
+            tableName: transactions
+            indexName: idx_transactions_account_id

@@ -177,25 +177,61 @@ Standalone utility, no dependency on transactions.
 | F-1003 | Web: Loan analyzer screen — picker chips, hero card, P-vs-I bar, amortization stacked bar, extra-monthly slider, lump-sum slider with savings/ROI tiles | web | in-progress | |
 | F-1004 | Mobile: parity | mobile | in-progress | |
 
-## Phase 11 — Tools: Chit Fund Tracker ⚡ (can run parallel to Phase 10)
+## Phase 11 — Platform Hardening (BLOCKERs)
 
-Optional and niche; last in priority. Confirm scope with user before starting.
-
-| ID | Feature | Surface | Status | Spec |
-|----|---------|---------|--------|------|
-| F-1101 | `ChitFund` + `ChitMonth` tables (months, members, monthly contribution, bid amounts, received month) | api | todo | |
-| F-1102 | Chit CRUD + profit/loss compute endpoint | api | todo | |
-| F-1103 | Web: Chit screen — picker, profit/loss hero, monthly grid, insight cards | web | todo | |
-| F-1104 | Mobile: parity | mobile | todo | |
-
-## Phase 12 — Polish & Export
+Cross-cutting fixes from the 2026-05-01 Jarvis platform review (`docs/reviews/2026-05-01-platform-phase-0-to-10-review.md`). Lands the BLOCKER-tier clusters: tenancy middleware, security, idempotency, audit-in-tx, contract drift, global auth guard, and the API test harness. Must complete before any new feature phase resumes.
 
 | ID | Feature | Surface | Status | Spec |
 |----|---------|---------|--------|------|
-| F-1201 | CSV export: transactions, bills, accounts (scoped) — replaces prototype "Download" button | api, web, mobile | todo | |
-| F-1202 | Empty/loading/error states audit across all screens | web, mobile | todo | |
-| F-1203 | i18n string sweep + a second locale (stretch) | web, mobile | todo | |
-| F-1204 | Accessibility audit (web) | web | todo | |
+| F-1101 | Tenancy middleware: `$extends` + `crossTenant` primitive (covers nested writes + raw SQL escape) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1102 | Security: HMAC hashing + constant-time compare + per-IP throttle + env validation + log redaction | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1103 | Idempotency: composite PK + body-hash 409 + interceptor coverage + client wrappers | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1104 | Audit events inside `$transaction` (households + me services) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1105 | Contract drift fix: `reset-pin` + `verify-for-security` alignment | contract, api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1106 | Global `JwtAuthGuard` via `APP_GUARD` + `@Public()` decorator | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+| F-1107 | API Vitest harness + invariant test pack (cross-tenant, money, idempotency, event-in-tx) | api | in-progress | [spec](specs/2026-04-24-phase-11-hardening.md) |
+
+## Phase 11b — Platform MAJORs cleanup
+
+Deferred MAJOR-tier findings from the same Jarvis review. No spec yet — to be scoped after Phase 11 BLOCKERs ship. One row per cluster.
+
+| ID | Feature | Surface | Status | Spec |
+|----|---------|---------|--------|------|
+| F-11b01 | Schema drift sweep: `prisma db pull`, backfill Phase 1 rollbacks, add `BillPayment` to `SOFT_DELETE_MODELS`, missing FK index on `loan_lump_sums.household_id`, explicit cascade rules | api, db | todo | |
+| F-11b02 | Web auth-store partialize: persist only `{refreshToken, activeHouseholdId}` (drop full `ApiUser` + `households` from localStorage) | web | todo | |
+| F-11b03 | Mobile NativeWind dark-mode wiring: consume `effectiveTheme`, replace 747 `LIGHT.*`/`ACCENTS.*` inline styles with `dark:` variants | mobile | todo | |
+| F-11b04 | Mobile money precision: replace `Number(amountMinor)` in stats/sparkline charts with BigInt-safe arithmetic | mobile | todo | |
+| F-11b05 | Shared money helpers: promote `parseMajor`/`formatMajor`/`majorToMinorString`/`minorStringToMajor` to `packages/core`; fix `formatMoney` BigInt coercion; unify currency allowlists | core, api, web, mobile | todo | |
+| F-11b06 | Shared web form primitives: `<Field*>` components + move 13 inline form schemas into `packages/core/src/<domain>/schemas.ts` | core, web | todo | |
+| F-11b07 | Household-keyed queries: include `activeHouseholdId` in query-key roots OR `queryClient.clear()` on switch | web, mobile, core | todo | |
+| F-11b08 | NestJS hygiene: `ZodValidationPipe` via `APP_PIPE`, dedupe `recordEvent` into shared events module, fix `LastSeenMiddleware` ordering, add `enableShutdownHooks` + body-size limit + correlation-id middleware, split 500+ LOC services | api | todo | |
+| F-11b09 | Error envelope polish: log `HttpException`s, surface `ZodValidationException` `details.fieldErrors`, strip `ThrottlerException` class-name leak, shared `mapApiError(err)` for web/mobile, route transport failures through `ApiRequestError` | api, web, mobile, core | todo | |
+| F-11b10 | Expo gate + connectivity: `(authed)` route group to kill unprotected first paint, bridge `onlineManager` to `NetInfo`, pass `projectId` to `getExpoPushTokenAsync`, re-register push on cold start, migrate long lists to `FlatList`, add visible feedback to `<Pressable>` | mobile | todo | |
+| F-11b11 | Tenancy defense-in-depth: add `household_id` predicates to raw SQL in `me.service`, `accounts/balance.service`, `categories.service` (covers gaps even after F-1101) | api | todo | |
+| F-11b12 | Audit hardening: event-type registry + per-type Zod payload schemas, backfill audit columns on `BillPayment`/`Notification`/`LoanLumpSum`/`Category`, replace `LoanLumpSum` hard-delete with soft-delete + event, move notification dispatch behind event subscription | api | todo | |
+| F-11b13 | Phase 10 (Loans) UI parity: ship `/tools/loans` web route + `app/(tabs)/tools.tsx` mobile screen (or amend Phase 10 spec to reflect deferral) | web, mobile | todo | |
+
+## Phase 13 — Tools: Chit Fund Tracker ⚡ (can run parallel to Phase 10)
+
+Optional and niche; last in priority. Confirm scope with user before starting. (Renumbered from Phase 11 on 2026-05-01 to make room for Phase 11 — Platform Hardening.)
+
+| ID | Feature | Surface | Status | Spec |
+|----|---------|---------|--------|------|
+| F-1301 | `ChitFund` + `ChitMonth` tables (months, members, monthly contribution, bid amounts, received month) | api | todo | |
+| F-1302 | Chit CRUD + profit/loss compute endpoint | api | todo | |
+| F-1303 | Web: Chit screen — picker, profit/loss hero, monthly grid, insight cards | web | todo | |
+| F-1304 | Mobile: parity | mobile | todo | |
+
+## Phase 14 — Polish & Export
+
+(Renumbered from Phase 12 on 2026-05-01.)
+
+| ID | Feature | Surface | Status | Spec |
+|----|---------|---------|--------|------|
+| F-1401 | CSV export: transactions, bills, accounts (scoped) — replaces prototype "Download" button | api, web, mobile | todo | |
+| F-1402 | Empty/loading/error states audit across all screens | web, mobile | todo | |
+| F-1403 | i18n string sweep + a second locale (stretch) | web, mobile | todo | |
+| F-1404 | Accessibility audit (web) | web | todo | |
 
 ## Deferred (post-v1)
 

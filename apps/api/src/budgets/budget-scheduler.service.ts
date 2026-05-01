@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from './budgets.service';
+import { requestContext } from '../common/context';
 
 /**
  * Daily 04:00 UTC scheduler — mirrors `bill-scheduler.service.ts`.
@@ -44,18 +45,22 @@ export class BudgetSchedulerService {
     // Advisory lock acquisition uses its own transaction so we can check the
     // result. We release by completing the transaction; actual budget
     // evaluation runs in per-budget sub-transactions below.
-    const locked = await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
-        SELECT pg_try_advisory_xact_lock(${BudgetSchedulerService.ADVISORY_LOCK_KEY}) AS locked
-      `;
-      const got = rows[0]?.locked === true;
-      if (!got) return false;
-      // Hold the lock for the entire scan — the second call below stays on
-      // the same advisory-lock-holding connection via $queryRaw in the SAME
-      // transaction.
-      await this.processAllWithinLock(tx, now);
-      return true;
-    });
+    const locked = await this.prisma.crossTenant(
+      'scheduler:budgets',
+      async (raw) =>
+        raw.$transaction(async (tx) => {
+          const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+            SELECT pg_try_advisory_xact_lock(${BudgetSchedulerService.ADVISORY_LOCK_KEY}) AS locked
+          `;
+          const got = rows[0]?.locked === true;
+          if (!got) return false;
+          // Hold the lock for the entire scan — the second call below stays on
+          // the same advisory-lock-holding connection via $queryRaw in the SAME
+          // transaction.
+          await this.processAllWithinLock(tx, now);
+          return true;
+        }),
+    );
 
     if (!locked) {
       this.logger.log('budget-scheduler skipped: advisory lock held by peer');
@@ -79,7 +84,9 @@ export class BudgetSchedulerService {
 
     for (const b of budgetRows) {
       try {
-        await this.processOne(b.id, b.household_id, now);
+        await requestContext.run({ householdId: b.household_id }, () =>
+          this.processOne(b.id, b.household_id, now),
+        );
       } catch (err: unknown) {
         this.logger.error(
           `budget-scheduler error budget_id=${b.id} household_id=${b.household_id} error=${String(err)}`,

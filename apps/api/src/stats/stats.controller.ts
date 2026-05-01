@@ -1,5 +1,4 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { StatsService } from './stats.service';
 import {
@@ -16,7 +15,7 @@ import {
  * admits any member role). No idempotency on GETs.
  */
 @Controller({ path: 'stats', version: '1' })
-@UseGuards(JwtAuthGuard, HouseholdHeaderGuard)
+@UseGuards(HouseholdHeaderGuard)
 export class StatsController {
   constructor(private readonly svc: StatsService) {}
 

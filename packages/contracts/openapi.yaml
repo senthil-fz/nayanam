@@ -37,6 +37,7 @@ paths:
       summary: Request an OTP code for the given email
       tags: [auth]
       security: []
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       requestBody:
         required: true
         content:
@@ -48,6 +49,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OtpRequestResult' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '429': { $ref: '#/components/responses/Error' }
 
   /auth/otp/verify:
@@ -56,6 +58,7 @@ paths:
       summary: Exchange an OTP for JWTs
       tags: [auth]
       security: []
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       requestBody:
         required: true
         content:
@@ -68,6 +71,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AuthSession' }
         '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /auth/refresh:
     post:
@@ -75,6 +79,7 @@ paths:
       summary: Rotate refresh token, issue a new token pair
       tags: [auth]
       security: []
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       requestBody:
         required: true
         content:
@@ -87,15 +92,18 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/TokenPair' }
         '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /auth/logout:
     post:
       operationId: authLogout
       summary: Revoke the current session
       tags: [auth]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
         '204': { description: Logged out }
         '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /me:
     get:
@@ -148,6 +156,7 @@ paths:
               schema: { $ref: '#/components/schemas/PushToken' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /me/push-tokens/{id}:
     delete:
@@ -159,10 +168,12 @@ paths:
           name: id
           required: true
           schema: { type: string }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
       responses:
         '204': { description: Deleted }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /households:
     get:
@@ -200,6 +211,7 @@ paths:
               schema: { $ref: '#/components/schemas/Household' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /households/{id}:
     parameters:
@@ -312,7 +324,17 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
+        '409':
+          description: |
+            Conflict. Either a domain conflict (e.g. duplicate pending invite)
+            using the standard error envelope, or an idempotency-replay body
+            mismatch with `code: 'IDEMPOTENCY_CONFLICT'`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/IdempotencyConflictResponse' }
+                  - { $ref: '#/components/schemas/ErrorResponse' }
 
   /households/{id}/invites/{inviteId}:
     parameters:
@@ -328,11 +350,13 @@ paths:
       operationId: revokeHouseholdInvite
       summary: Revoke a pending household invite
       tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
         '204': { description: Revoked }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /accounts:
     get:
@@ -2127,10 +2151,15 @@ paths:
         `extraMonthlyMinor` / `lumpSums`. `comparisonBaseline` chooses the
         savings reference: `saved` (default) compares against the loan's
         saved what-ifs; `contractual` compares against the zero-extra,
-        zero-lump contractual schedule. Idempotency-Key is NOT honored
-        here (the endpoint has no side effects); clients dedupe via query
-        cache. Any household member role is permitted.
+        zero-lump contractual schedule. The endpoint has no persisted
+        side effects but `Idempotency-Key` is honored as a generic dedupe
+        guard (Phase 11 hardening); a replay with the same key + same
+        body returns the cached response, a replay with the same key +
+        different body returns `409 IDEMPOTENCY_CONFLICT`. Any household
+        member role is permitted.
       tags: [loans]
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
       requestBody:
         required: true
         content:
@@ -2146,6 +2175,7 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '422': { $ref: '#/components/responses/Error' }
 
   /attachments/presign-upload:
@@ -2483,6 +2513,7 @@ paths:
       operationId: acceptInvite
       summary: Accept a household invite by token
       tags: [households]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       requestBody:
         required: true
         content:
@@ -2499,6 +2530,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/HouseholdSummary' }
         '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
 
   /stats/overview:
     get:
@@ -3015,9 +3047,50 @@ paths:
               schema: { $ref: '#/components/schemas/VerifyPinResponse' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
+        '409':
+          description: |
+            Conflict. Either a domain conflict (e.g. `PIN_NOT_SET`) using the
+            standard error envelope, or an idempotency-replay body mismatch
+            with `code: 'IDEMPOTENCY_CONFLICT'`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/IdempotencyConflictResponse' }
+                  - { $ref: '#/components/schemas/ErrorResponse' }
         '422': { $ref: '#/components/responses/Error' }
         '423': { $ref: '#/components/responses/Error' }
+
+  /me/security/reset-pin:
+    post:
+      operationId: resetMePin
+      summary: Reset the user's PIN using a security-reset OTP token
+      description: |
+        Forgot-PIN flow. The caller exchanges an `otpToken` previously
+        obtained from `POST /auth/otp/verify-for-security` for a PIN reset.
+        On success, `pin_hash` is replaced with the argon2id hash of
+        `newPin`, `pin_failed_attempts` and `pin_locked_until` are cleared,
+        and a `user.security_updated` event is recorded. Requires the
+        normal Bearer auth — the OTP token authorizes the reset action,
+        not the request itself.
+      tags: [me]
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPinInput' }
+      responses:
+        '200':
+          description: PIN reset
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResetPinResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/Error' }
 
   /auth/otp/verify-for-security:
     post:
@@ -3032,6 +3105,7 @@ paths:
         (reuses Phase 1 `/auth/otp/request` primitives).
       tags: [auth]
       security: []
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
       requestBody:
         required: true
         content:
@@ -3045,6 +3119,7 @@ paths:
               schema: { $ref: '#/components/schemas/VerifyOtpForSecurityResponse' }
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '422': { $ref: '#/components/responses/Error' }
 
   /me/notification-preferences:
@@ -3161,6 +3236,21 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    IdempotencyConflict:
+      description: |
+        Returned when a request with a previously-seen `Idempotency-Key`
+        for the same authenticated user is replayed with a different request
+        body (canonical hash mismatch). Clients must either reuse the original
+        body or supply a fresh `Idempotency-Key`. The response uses the
+        standard error envelope with `code: 'IDEMPOTENCY_CONFLICT'`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/IdempotencyConflictResponse' }
+    IdempotencyInFlight:
+      description: The idempotency key is currently being processed by another request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   securitySchemes:
     BearerAuth:
@@ -3250,6 +3340,9 @@ components:
         - LOAN_TERM_OUT_OF_RANGE
         - LOAN_ALREADY_PAID_OFF
         - LOAN_ARCHIVED
+        - IDEMPOTENCY_CONFLICT
+        - IDEMPOTENCY_KEY_INVALID
+        - IDEMPOTENCY_IN_FLIGHT
 
     ErrorResponse:
       type: object
@@ -3260,6 +3353,47 @@ components:
           required: [code, message]
           properties:
             code: { $ref: '#/components/schemas/ErrorCode' }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+
+    IdempotencyConflictResponse:
+      type: object
+      description: |
+        Specialization of `ErrorResponse` returned with HTTP 409 when an
+        `Idempotency-Key` is replayed for the same user with a different
+        request body. `error.code` is always the literal `IDEMPOTENCY_CONFLICT`.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [IDEMPOTENCY_CONFLICT]
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+
+    IdempotencyInFlightResponse:
+      type: object
+      description: |
+        Specialization of `ErrorResponse` returned with HTTP 409 when an
+        `Idempotency-Key` is currently being processed by another in-flight
+        request for the same user. Clients should wait briefly and retry.
+        `error.code` is always the literal `IDEMPOTENCY_IN_FLIGHT`.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [IDEMPOTENCY_IN_FLIGHT]
             message: { type: string }
             details:
               type: object
@@ -5633,6 +5767,29 @@ components:
           pattern: '^\d{6}$'
 
     VerifyPinResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    ResetPinInput:
+      type: object
+      required: [otpToken, newPin]
+      properties:
+        otpToken:
+          type: string
+          minLength: 10
+          description: |
+            Short-lived security-reset JWT (`aud: 'security-reset'`,
+            5-minute TTL) issued by `POST /auth/otp/verify-for-security`.
+        newPin:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^\d{6}$'
+          description: New 6-digit numeric PIN to install.
+
+    ResetPinResponse:
       type: object
       required: [ok]
       properties:

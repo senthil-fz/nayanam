@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260501-002-phase-11-drop-response-hash
+      author: nayanam
+      comment: |
+        Phase 11 — Platform Hardening (BLOCKER cluster I1–I4 follow-up).
+
+        Drops the legacy `response_hash` column from `idempotency_keys`. The
+        hash was a fingerprint of the cached response body, but with the new
+        body-hash + 409 IDEMPOTENCY_CONFLICT semantics introduced in
+        20260501-001 the interceptor only needs `request_hash` (to detect
+        same-key + different-body replays) and the cached `response_body` /
+        `status_code` (to replay). The response fingerprint is unused.
+      preConditions:
+        - onFail: HALT
+        - and:
+            - tableExists: { tableName: idempotency_keys }
+            - columnExists:
+                tableName: idempotency_keys
+                columnName: response_hash
+      changes:
+        - dropColumn:
+            tableName: idempotency_keys
+            columnName: response_hash
+      rollback:
+        - addColumn:
+            tableName: idempotency_keys
+            columns:
+              - column:
+                  name: response_hash
+                  type: TEXT
+                  constraints:
+                    nullable: false

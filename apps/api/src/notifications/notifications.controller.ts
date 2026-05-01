@@ -11,7 +11,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { NotificationsService } from './notifications.service';
@@ -22,7 +21,6 @@ import {
 } from './notifications.dto';
 
 @Controller({ path: 'notifications', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly svc: NotificationsService) {}
 

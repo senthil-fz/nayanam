@@ -1,28 +1,56 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { VersioningType } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { Logger, VersioningType } from '@nestjs/common';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import helmet from 'helmet';
+import express from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  app.useLogger(app.get(Logger));
+  app.useLogger(app.get(PinoLogger));
 
-  const port = Number(process.env.API_PORT ?? 3000);
-  const corsOrigins = (process.env.API_CORS_ORIGINS ?? 'http://localhost:5173').split(',');
+  const config = app.get(ConfigService);
+  const port = config.get<number>('API_PORT', 3000);
+  const corsOrigins = config.get<string[]>('API_CORS_ORIGINS', ['http://localhost:5173']);
+  const nodeEnv = config.get<string>('NODE_ENV', 'development');
 
-  app.use(helmet());
+  // Enable trust-proxy so Express reads X-Forwarded-For correctly behind
+  // a reverse proxy (nginx, ALB, etc.). Must be called on the underlying
+  // Express instance since NestJS does not expose `set` on INestApplication.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  (app.getHttpAdapter().getInstance() as import('express').Application).set('trust proxy', 1);
+
+  app.use(
+    helmet({
+      hsts:
+        nodeEnv === 'production'
+          ? { maxAge: 31536000, includeSubDomains: true }
+          : false,
+    }),
+  );
+
+  app.use(express.json({ limit: '1mb' }));
+
   app.enableCors({ origin: corsOrigins, credentials: true });
+  // NOTE: globalPrefix='api' + version='1' produces /api/v1/... — changing either independently will break URL structure.
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalPipes(new ZodValidationPipe());
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // ZodValidationPipe and HttpExceptionFilter are registered as DI-aware
+  // providers via APP_PIPE / APP_FILTER in AppModule. Do NOT call
+  // useGlobalPipes / useGlobalFilters here — that would bypass DI and create
+  // a second, non-injectable instance.
+
+  app.enableShutdownHooks();
 
   await app.listen(port);
-  console.log(`Nayanam API listening on http://localhost:${port}/api/v1`);
+
+  const logger = app.get(Logger);
+  logger.log(
+    `Nayanam API listening on http://localhost:${port}/api/v1`,
+    'Bootstrap',
+  );
 }
 
 void bootstrap();

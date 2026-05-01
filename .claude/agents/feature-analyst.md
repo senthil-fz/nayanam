@@ -1,7 +1,7 @@
 ---
 name: feature-analyst
 description: Turns a feature idea or bug report into a complete written spec that the rest of the team can build from. Invoked by tech-lead as the FIRST step of every feature (before api-contract). Produces a markdown spec in docs/specs/ covering problem, user stories, scope, data model deltas, API surface sketch, UX notes for web + mobile, edge cases, and acceptance criteria.
-model: opus
+model: sonnet
 color: yellow
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---

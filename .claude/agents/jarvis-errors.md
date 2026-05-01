@@ -2,7 +2,7 @@
 name: jarvis-errors
 description: Reviews error handling end-to-end — backend exception filter, domain error classes, the standard error envelope { error: { code, message, details? } }, and client consumption (web + mobile branching on error.code). Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: orange
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: frontend-react
 description: React web specialist for Nayanam. Builds screens and features in apps/web using TanStack Router, TanStack Query, React Hook Form, Zod, Zustand. Consumes the shared TS client from packages/contracts and shared hooks/stores/schemas from packages/core. Invoked by tech-lead in parallel with backend-nest and mobile-expo after api-contract has updated the spec.
-model: opus
+model: sonnet
 color: blue
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---

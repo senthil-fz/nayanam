@@ -1,7 +1,7 @@
 ---
 name: backend-nest
 description: NestJS + Prisma + Liquibase + Postgres specialist for Nayanam. Implements API endpoints, database changes, and backend concerns (auth, idempotency, events, notifications, attachments). Invoked by tech-lead AFTER api-contract has updated the OpenAPI spec.
-model: opus
+model: sonnet
 color: red
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---

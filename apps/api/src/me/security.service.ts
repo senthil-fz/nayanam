@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { Errors } from '../common/errors';
+import { recordUserEvent } from './me.service';
 
 const PIN_REGEX = /^\d{6}$/;
 const MAX_FAILED = 5;
@@ -100,9 +102,15 @@ export class SecurityService {
       return { status: this.toStatus(row), changedFlags: {} };
     }
 
-    const updated = await this.prisma.userSecurity.update({
-      where: { userId },
-      data: { ...data, updatedAt: new Date() },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.userSecurity.update({
+        where: { userId },
+        data: { ...data, updatedAt: new Date() },
+      });
+      if (Object.keys(changed).length > 0) {
+        await recordUserEvent(tx, userId, null, EventType.USER_SECURITY_UPDATED, { flags: changed });
+      }
+      return u;
     });
 
     return { status: this.toStatus(updated), changedFlags: changed };
@@ -145,15 +153,20 @@ export class SecurityService {
     if (!PIN_REGEX.test(newPin)) throw Errors.pinFormatInvalid();
     await this.upsertDefault(userId);
     const hash = await argon2.hash(newPin, ARGON_OPTS);
-    await this.prisma.userSecurity.update({
-      where: { userId },
-      data: {
-        pinHash: hash,
-        pinLastChangedAt: new Date(),
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
-        updatedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userSecurity.update({
+        where: { userId },
+        data: {
+          pinHash: hash,
+          pinLastChangedAt: new Date(),
+          pinFailedAttempts: 0,
+          pinLockedUntil: null,
+          updatedAt: new Date(),
+        },
+      });
+      await recordUserEvent(tx, userId, null, 'user.security_updated', {
+        flags: { pinSet: true, reason: 'reset' },
+      });
     });
   }
 

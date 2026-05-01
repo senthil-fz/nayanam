@@ -2,7 +2,7 @@
 name: jarvis-parity
 description: Reviews web ↔ mobile feature parity — every capability shipped on web is reachable on mobile (or explicitly deferred in the spec), both clients call the same generated client method, share the same Zod schemas from packages/core, and apply consistent role gating. Runs only when the diff touches both apps/web and apps/mobile. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: green
 ---
 

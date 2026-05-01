@@ -11,7 +11,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { TransfersService } from './transfers.service';
@@ -19,7 +18,7 @@ import { CreateTransferDto } from './transfers.dto';
 import { Errors } from '../common/errors';
 
 @Controller({ path: 'transfers', version: '1' })
-@UseGuards(JwtAuthGuard, HouseholdHeaderGuard)
+@UseGuards(HouseholdHeaderGuard)
 export class TransfersController {
   constructor(private readonly svc: TransfersService) {}
 

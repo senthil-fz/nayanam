@@ -2,7 +2,7 @@
 name: jarvis-security
 description: Cross-cutting security reviewer for Nayanam — auth (email + OTP, JWT, refresh-token rotation), authorization, transport headers (helmet, CORS), input validation, secrets management, crypto, rate limiting, PII in logs, web/mobile token storage. Always runs when any other Jarvis stage is in scope. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: orange
 ---
 

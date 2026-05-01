@@ -2,7 +2,7 @@
 name: jarvis-expo
 description: Reviews Expo / React Native code (apps/mobile/**) against the jarvis-expo checklist — Expo Router structure, NativeWind, TanStack Query, RHF + Zod, SecureStore for tokens, generated client usage, FlatList performance, push notification wiring. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: green
 ---
 

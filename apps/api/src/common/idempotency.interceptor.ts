@@ -5,28 +5,43 @@ import {
   Logger,
   NestInterceptor,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
-import { Observable, from, of, switchMap, tap } from 'rxjs';
-import { createHash } from 'node:crypto';
+import { Observable, from, switchMap } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { canonicalJSON } from './canonicalize';
 import type { AuthContext } from './context';
+import { Errors } from './errors';
+import { sha256Hex } from './hash';
 
 /**
  * Replay-safe idempotency for mutating endpoints.
  *
- * Client sends `Idempotency-Key: <opaque>`. On first call we execute the
- * handler, serialize the JSON response, persist `{key, userId, method, path,
- * statusCode, responseBody}` with a 24h TTL, and return the live response.
- * On replay with the same key (any time within TTL) we short-circuit the
- * handler and return the cached response and status code — no duplicate
- * mutation, no event re-emission.
+ * Behavior contract (Phase 11 hardening):
+ *   - Header `Idempotency-Key` is REQUIRED only by upstream decorators; this
+ *     interceptor passes through if absent.
+ *   - The cache row is keyed on the composite `(userId, key)` so the same
+ *     opaque key sent by two different users never collides.
+ *   - On every mutating call we compute `requestHash = sha256Hex(canonicalJSON
+ *     (body))` and store it. On replay we compare hashes:
+ *       * match (and same method+path)  → return the cached response + status
+ *       * mismatch (or method/path drift) → 409 IDEMPOTENCY_CONFLICT
+ *     This protects clients from the classic "I retried with edits" footgun.
+ *   - Expired rows are deleted lazily on read in addition to the hourly reaper.
+ *   - Request-hash uses bare SHA-256: this is a non-secret fingerprint, an
+ *     attacker who could read the DB already has the body (`responseBody`
+ *     column). HMAC would buy nothing. See `common/hash.ts` docstring.
  *
- * Applied on any route. Missing header = pass through, no record.
+ * Pass-through cases (no record created, no replay):
+ *   - No `Idempotency-Key` header.
+ *   - No authenticated user on the request.
  */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   private readonly logger = new Logger(IdempotencyInterceptor.name);
   private static readonly TTL_MS = 24 * 60 * 60 * 1000;
+  private static readonly KEY_MIN = 8;
+  private static readonly KEY_MAX = 200;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -35,76 +50,168 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const req = http.getRequest<Request & { user?: AuthContext }>();
     const res = http.getResponse<Response>();
 
-    const key = (req.header('idempotency-key') ?? req.header('Idempotency-Key'))?.trim();
+    const rawKey = req.header('idempotency-key') ?? req.header('Idempotency-Key');
+    const key = rawKey?.trim();
     if (!key) return next.handle();
-    if (key.length < 8 || key.length > 200) return next.handle();
+
+    if (key.length < IdempotencyInterceptor.KEY_MIN || key.length > IdempotencyInterceptor.KEY_MAX) {
+      throw Errors.idempotencyKeyInvalid({ keyLength: key.length });
+    }
 
     const userId = req.user?.userId;
     if (!userId) return next.handle();
 
     const method = req.method.toUpperCase();
-    const path = req.baseUrl + req.path;
+    const path = (req.baseUrl ?? '') + (req.path ?? '');
+    const requestHash = sha256Hex(canonicalJSON(req.body ?? {}));
 
     return from(
-      this.prisma.idempotencyKey.findUnique({ where: { key } }),
+      this.prisma.idempotencyKey.findUnique({
+        where: { userId_key: { userId, key } },
+      }),
     ).pipe(
       switchMap((existing) => {
         if (existing) {
-          // Same key, different route = reject. Keeps keys scoped to their intended call.
+          if (existing.expiresAt.getTime() < Date.now()) {
+            // Expired — drop the stale row and proceed as a fresh insert-before-execute.
+            return from(
+              this.prisma.idempotencyKey
+                .delete({ where: { userId_key: { userId, key } } })
+                .catch(() => undefined),
+            ).pipe(
+              switchMap(() =>
+                this.insertBeforeExecute(key, userId, method, path, requestHash, next, res),
+              ),
+            );
+          }
+
+          // Live row. Same key MUST mean same request — including method, path,
+          // and body. Any drift means the client reused a key by accident: 409.
           if (
-            existing.userId !== userId ||
+            existing.requestHash !== requestHash ||
             existing.method !== method ||
             existing.path !== path
           ) {
-            return next.handle();
+            throw Errors.idempotencyConflict();
           }
-          if (existing.expiresAt.getTime() < Date.now()) {
-            // Expired — delete and fall through to live path.
-            return from(
-              this.prisma.idempotencyKey.delete({ where: { key } }).catch(() => undefined),
-            ).pipe(switchMap(() => this.liveAndCache(key, userId, method, path, next, res)));
+
+          // statusCode === 0 means a prior request is still in-flight.
+          if (existing.statusCode === 0) {
+            throw Errors.idempotencyInFlight();
           }
+
           res.status(existing.statusCode);
-          return of(existing.responseBody);
+          return from(Promise.resolve(existing.responseBody));
         }
-        return this.liveAndCache(key, userId, method, path, next, res);
+        return this.insertBeforeExecute(key, userId, method, path, requestHash, next, res);
       }),
     );
   }
 
-  private liveAndCache(
+  /**
+   * Insert-before-execute: reserve the `(userId, key)` slot with a placeholder
+   * row (statusCode = 0, responseBody = null) BEFORE calling the handler. The
+   * unique constraint on `(userId, key)` acts as a distributed mutex so at most
+   * one handler fires per key.
+   *
+   *   INSERT succeeds  → execute handler → UPDATE row with real response.
+   *   INSERT fails P2002 → concurrent request holds the slot:
+   *     - statusCode > 0  → completed, replay the cached response.
+   *     - statusCode = 0  → still in-flight, return 409 IDEMPOTENCY_IN_FLIGHT.
+   */
+  private insertBeforeExecute(
     key: string,
     userId: string,
     method: string,
     path: string,
+    requestHash: string,
     next: CallHandler,
     res: Response,
   ): Observable<unknown> {
-    return next.handle().pipe(
-      tap((body) => {
-        // Fire-and-forget cache write. We don't block the response on it.
-        const status = res.statusCode ?? 200;
-        const serialized = safeSerialize(body);
-        const responseHash = createHash('sha256').update(serialized).digest('hex');
-        const responseBody = JSON.parse(serialized) as unknown;
-        this.prisma.idempotencyKey
-          .create({
-            data: {
-              key,
-              userId,
-              method,
-              path,
-              statusCode: status,
-              responseHash,
-              responseBody: responseBody as object,
-              expiresAt: new Date(Date.now() + IdempotencyInterceptor.TTL_MS),
-            },
-          })
-          .catch((err: unknown) => {
-            // Unique violation = a concurrent first-request won the race.
-            // That's fine: next replay will hit the cached row.
-            this.logger.debug(`idempotency cache miss (race): ${String(err)}`);
+    const expiresAt = new Date(Date.now() + IdempotencyInterceptor.TTL_MS);
+
+    const reservePromise = this.prisma.idempotencyKey
+      .create({
+        data: {
+          key,
+          userId,
+          method,
+          path,
+          statusCode: 0,
+          requestHash,
+          responseBody: Prisma.JsonNull,
+          expiresAt,
+        },
+      })
+      .then(() => true as const)
+      .catch(async (err: unknown) => {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          // Another request holds (or held) the slot.
+          const concurrent = await this.prisma.idempotencyKey.findUnique({
+            where: { userId_key: { userId, key } },
           });
+          if (!concurrent) {
+            // Row was deleted between the failed insert and the re-read
+            // (e.g. expiry reaper). Treat as a miss and let the caller retry
+            // from scratch — safest option is to surface in-flight so the
+            // client backs off briefly.
+            throw Errors.idempotencyInFlight();
+          }
+          if (concurrent.statusCode > 0) {
+            // Completed by the winning request — replay.
+            return { replay: true, row: concurrent } as const;
+          }
+          // Still in-flight.
+          throw Errors.idempotencyInFlight();
+        }
+        throw err;
+      });
+
+    return from(reservePromise).pipe(
+      switchMap((result) => {
+        // Replay path — re-read won the insert race and already completed.
+        if (result !== true) {
+          res.status(result.row.statusCode);
+          return from(Promise.resolve(result.row.responseBody));
+        }
+
+        // We hold the slot. Execute the handler, then commit the real response.
+        return from(
+          new Promise<unknown>((resolve, reject) => {
+            next
+              .handle()
+              .subscribe({
+                next: (body) => resolve(body),
+                error: (err: unknown) => reject(err),
+              });
+          }).then(async (body) => {
+            const status = res.statusCode ?? 200;
+            const serialized = safeSerialize(body);
+            const responseBody = JSON.parse(serialized) as unknown;
+            await this.prisma.idempotencyKey.update({
+              where: { userId_key: { userId, key } },
+              data: {
+                statusCode: status,
+                responseBody: responseBody as object,
+              },
+            });
+            return body;
+          }).catch(async (err: unknown) => {
+            // Handler threw — delete the placeholder so the client can retry
+            // with the same key (the mutation never ran to completion).
+            await this.prisma.idempotencyKey
+              .delete({ where: { userId_key: { userId, key } } })
+              .catch((deleteErr: unknown) => {
+                this.logger.error(
+                  `idempotency placeholder cleanup failed for user=${userId} key=${key}: ${stringifyErr(deleteErr)}`,
+                );
+              });
+            throw err;
+          }),
+        );
       }),
     );
   }
@@ -118,4 +225,13 @@ function safeSerialize(value: unknown): string {
   return JSON.stringify(value, (_k, v: unknown) =>
     typeof v === 'bigint' ? v.toString() : v,
   );
+}
+
+function stringifyErr(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }

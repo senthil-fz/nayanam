@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: phase-11-truncate-stale-sessions
+      author: nayanam
+      comment: |
+        Phase 11 — Platform Hardening (BLOCKER cluster S1–S4).
+
+        Truncates `sessions` and `email_change_requests` because the Phase 11
+        security cluster re-keys refresh-token + OTP hashes under HMAC-SHA-256
+        with a server-side pepper. Previously-stored bare SHA-256 hex values
+        cannot be silently re-compared under the new primitive without a
+        dual-read window (rejected per spec). Active users will be silently
+        logged out and pending email-change OTPs invalidated; users re-OTP.
+        Acceptable given current user count and security upside.
+
+        Extracted from 20260501-001-phase-11-hardening-idempotency so that the
+        security truncations have their own rollback documentation and are
+        independently trackable.
+      preConditions:
+        - onFail: HALT
+        - and:
+            - tableExists: { tableName: sessions }
+            - tableExists: { tableName: email_change_requests }
+      changes:
+        - sql:
+            sql: TRUNCATE TABLE sessions;
+        - sql:
+            sql: TRUNCATE TABLE email_change_requests;
+      rollback:
+        - sql:
+            sql: "-- DATA LOSS: session and OTP data truncated in forward pass is irrecoverable. This rollback is intentionally a no-op."

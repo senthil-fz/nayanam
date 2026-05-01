@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
+import { recordUserEvent } from './me.service';
 
 export type NotificationPreferencesDTO = {
   pushBillsEnabled: boolean;
@@ -48,9 +50,15 @@ export class NotificationPreferencesService {
       return { dto: this.toDTO(existing), changed: [] };
     }
     data.updatedAt = new Date();
-    const updated = await this.prisma.userNotificationPreferences.update({
-      where: { userId },
-      data,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.userNotificationPreferences.update({
+        where: { userId },
+        data,
+      });
+      await recordUserEvent(tx, userId, null, EventType.USER_NOTIFICATION_PREFERENCES_UPDATED, {
+        changedFields: changed,
+      });
+      return u;
     });
     return { dto: this.toDTO(updated), changed };
   }

@@ -11,6 +11,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type { ApiClient } from '../api/client';
+import type { ApiSchemas } from '@nayanam/contracts';
 import type {
   ChangeEmailRequestInputType,
   ChangeEmailVerifyInputType,
@@ -20,6 +21,8 @@ import type {
   VerifyPinInputType,
   VerifyOtpForSecurityInputType,
 } from './schemas';
+
+type ResetPinInputType = ApiSchemas['ResetPinInput'];
 
 function genIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -63,7 +66,10 @@ export type UpdateMeSecurityVars = UpdateMeSecurityInputType & {
   idempotencyKey?: string;
 };
 export type VerifyMePinVars = VerifyPinInputType & { idempotencyKey?: string };
-export type VerifyOtpForSecurityVars = VerifyOtpForSecurityInputType;
+export type VerifyOtpForSecurityVars = VerifyOtpForSecurityInputType & {
+  idempotencyKey?: string;
+};
+export type ResetMePinVars = ResetPinInputType & { idempotencyKey?: string };
 export type UpdateNotificationPreferencesVars =
   PatchNotificationPreferencesInputType & { idempotencyKey?: string };
 
@@ -192,8 +198,25 @@ export function makeMeHooks(
 
   function useVerifyOtpForSecurity() {
     return useMutation({
-      mutationFn: (vars: VerifyOtpForSecurityVars) =>
-        client.authOtpVerifyForSecurity(vars),
+      onMutate: ensureKey<VerifyOtpForSecurityVars>,
+      mutationFn: (vars: VerifyOtpForSecurityVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.authOtpVerifyForSecurity(body, idempotencyKey);
+      },
+    });
+  }
+
+  function useResetMePin() {
+    const qc = useQueryClient();
+    return useMutation({
+      onMutate: ensureKey<ResetMePinVars>,
+      mutationFn: (vars: ResetMePinVars) => {
+        const { idempotencyKey, ...body } = vars;
+        return client.resetMePin(body, idempotencyKey);
+      },
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: meKeys.security() });
+      },
     });
   }
 
@@ -252,6 +275,7 @@ export function makeMeHooks(
     useUpdateMeSecurity,
     useVerifyMePin,
     useVerifyOtpForSecurity,
+    useResetMePin,
     useNotificationPreferences,
     useUpdateNotificationPreferences,
     useMetaLinks,

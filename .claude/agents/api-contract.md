@@ -1,7 +1,7 @@
 ---
 name: api-contract
 description: Owns packages/contracts/openapi.yaml — the source of truth for all Nayanam API shapes. Invoked by tech-lead BEFORE any feature that touches the API, and whenever an endpoint's request/response shape changes. Also regenerates the shared TS client and flags breaking changes.
-model: opus
+model: sonnet
 color: cyan
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---

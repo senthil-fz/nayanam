@@ -1,5 +1,14 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
-import type { Response } from 'express';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import { ZodValidationException } from 'nestjs-zod';
+import { ZodError } from 'zod';
+import type { Request, Response } from 'express';
 
 type ErrorBody = {
   error: {
@@ -16,13 +25,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest<Request>();
+    const correlationId =
+      (req.headers['x-correlation-id'] as string | undefined) ?? 'unknown';
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let body: ErrorBody = {
       error: { code: 'INTERNAL_ERROR', message: 'Something went wrong.' },
     };
 
-    if (exception instanceof HttpException) {
+    // Zod validation exceptions — emit VALIDATION_ERROR with flattened details.
+    if (exception instanceof ZodValidationException) {
+      status = HttpStatus.BAD_REQUEST;
+      body = {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed.',
+          details: (exception.getZodError() as ZodError).flatten() as unknown as Record<
+            string,
+            unknown
+          >,
+        },
+      };
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const resp = exception.getResponse();
       if (typeof resp === 'string') {
@@ -32,13 +57,35 @@ export class HttpExceptionFilter implements ExceptionFilter {
         body = {
           error: {
             code: (r.code as string | undefined) ?? codeForStatus(status),
-            message: (r.message as string | undefined) ?? codeForStatus(status),
-            details: (r.details as Record<string, unknown> | undefined) ?? undefined,
+            message:
+              (r.message as string | undefined) ?? codeForStatus(status),
+            details:
+              (r.details as Record<string, unknown> | undefined) ?? undefined,
           },
         };
       }
+
+      if (status >= 500) {
+        const msg =
+          exception instanceof Error
+            ? exception.message
+            : String(exception);
+        this.logger.error(
+          { correlationId, msg },
+          `[${correlationId}] ${msg}`,
+        );
+      }
     } else if (exception instanceof Error) {
-      this.logger.error(exception.stack ?? exception.message);
+      this.logger.error(
+        {
+          correlationId,
+          msg: exception.message,
+          ...(process.env.NODE_ENV !== 'production' && {
+            stack: exception.stack,
+          }),
+        },
+        `[${correlationId}] ${exception.message}`,
+      );
     }
 
     res.status(status).json(body);
@@ -47,13 +94,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
 function codeForStatus(status: number): string {
   switch (status) {
-    case 400: return 'BAD_REQUEST';
-    case 401: return 'UNAUTHORIZED';
-    case 403: return 'FORBIDDEN';
-    case 404: return 'NOT_FOUND';
-    case 409: return 'CONFLICT';
-    case 422: return 'UNPROCESSABLE_ENTITY';
-    case 429: return 'RATE_LIMITED';
-    default: return status >= 500 ? 'INTERNAL_ERROR' : 'ERROR';
+    case 400:
+      return 'BAD_REQUEST';
+    case 401:
+      return 'UNAUTHORIZED';
+    case 403:
+      return 'FORBIDDEN';
+    case 404:
+      return 'NOT_FOUND';
+    case 409:
+      return 'CONFLICT';
+    case 422:
+      return 'UNPROCESSABLE_ENTITY';
+    case 429:
+      return 'RATE_LIMITED';
+    default:
+      return status >= 500 ? 'INTERNAL_ERROR' : 'ERROR';
   }
 }

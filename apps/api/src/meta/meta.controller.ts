@@ -1,9 +1,7 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller({ path: 'meta', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class MetaController {
   constructor(private readonly config: ConfigService) {}
 

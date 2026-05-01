@@ -13,6 +13,7 @@ export type RequestContext = {
   auth?: AuthContext;
   householdId?: string;
   householdRole?: string;
+  correlationId?: string;
 };
 
 export const requestContext = new AsyncLocalStorage<RequestContext>();

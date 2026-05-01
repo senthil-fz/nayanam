@@ -2,7 +2,7 @@
 name: prometheus-decomposer
 description: Phase 2 specialist for the Prometheus delivery orchestrator (Nayanam). Reads spec.md (feature mode) or triage.md (fix mode) and produces tasks.json — a structured task graph with dependencies, assignees (api-contract / backend-nest / frontend-react / mobile-expo), per-task acceptance criteria, affected-files predictions, and pre-computed autonomy-gate flags. Regenerates progress.md from the new graph. Use only when spawned by the prometheus skill.
 tools: Read, Grep, Glob, Bash, Write
-model: opus
+model: sonnet
 color: yellow
 ---
 

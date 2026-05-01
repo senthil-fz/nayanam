@@ -12,7 +12,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { BudgetsService } from './budgets.service';
@@ -26,7 +25,7 @@ import {
 } from './budgets.dto';
 
 @Controller({ path: 'budgets', version: '1' })
-@UseGuards(JwtAuthGuard, HouseholdHeaderGuard)
+@UseGuards(HouseholdHeaderGuard)
 export class BudgetsController {
   constructor(private readonly svc: BudgetsService) {}
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
+import { maskEmail } from '../common/email-mask';
 
 @Injectable()
 export class MailService {
@@ -28,14 +29,14 @@ export class MailService {
     const subject = `Your Nayanam code: ${code}`;
     const text = `Your one-time code is ${code}. It expires in 10 minutes.\n\nIf you did not request this, ignore this email.`;
     await this.transporter.sendMail({ from: this.from, to: email, subject, text });
-    this.logger.log(`OTP mailed to ${email}`);
+    this.logger.log(`OTP mailed to ${maskEmail(email)}`);
   }
 
   async sendInvite(email: string, householdName: string, acceptUrl: string): Promise<void> {
     const subject = `You've been invited to join ${householdName} on Nayanam`;
     const text = `You have been invited to join the household "${householdName}".\n\nAccept here: ${acceptUrl}\n\nThis invite expires in 7 days.`;
     await this.transporter.sendMail({ from: this.from, to: email, subject, text });
-    this.logger.log(`Invite mailed to ${email}`);
+    this.logger.log(`Invite mailed to ${maskEmail(email)}`);
   }
 
   /** Send an email-change OTP to the NEW address. */
@@ -43,7 +44,7 @@ export class MailService {
     const subject = `Confirm your new Nayanam email: ${code}`;
     const text = `Your email-change confirmation code is ${code}. It expires in 10 minutes.\n\nIf you did not request this change, you can ignore this email.`;
     await this.transporter.sendMail({ from: this.from, to: newEmail, subject, text });
-    this.logger.log(`Email-change OTP mailed to ${newEmail}`);
+    this.logger.log(`Email-change OTP mailed to ${maskEmail(newEmail)}`);
   }
 
   /** Tripwire notice to the OLD address after an email change completes. */
@@ -51,12 +52,12 @@ export class MailService {
     const subject = 'Your Nayanam email was changed';
     const text = `Your Nayanam account email was just changed to ${newEmailMasked}.\n\nIf this was you, no action is needed. If not, contact support immediately.`;
     await this.transporter.sendMail({ from: this.from, to: oldEmail, subject, text });
-    this.logger.log(`Email-change notice mailed to ${oldEmail}`);
+    this.logger.log(`Email-change notice mailed to ${maskEmail(oldEmail)}`);
   }
 
   /** Generic send for notification-dispatch email fan-out + weekly summary. */
   async sendGeneric(email: string, subject: string, text: string, html?: string): Promise<void> {
     await this.transporter.sendMail({ from: this.from, to: email, subject, text, html });
-    this.logger.log(`Generic mail sent to ${email}`);
+    this.logger.log(`Generic mail sent to ${maskEmail(email)}`);
   }
 }

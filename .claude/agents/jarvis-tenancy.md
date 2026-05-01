@@ -2,7 +2,7 @@
 name: jarvis-tenancy
 description: Reviews enforcement of the householdId scoping invariant — every domain row carries householdId, every query scopes by householdId from the auth context, the Prisma middleware in apps/api/src/prisma/prisma.service.ts is the single source of enforcement, and HOUSEHOLD_SCOPED_MODELS lists every household-owned model. The most critical Nayanam invariant. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

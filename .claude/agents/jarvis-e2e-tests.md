@@ -2,7 +2,7 @@
 name: jarvis-e2e-tests
 description: Reviews e2e coverage — Playwright for API (request fixture) and web (browser), Maestro for mobile flows. Enforces happy path + auth/permission negatives + cross-household isolation + idempotency replay per endpoint, and one e2e per user-facing screen / flow. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: purple
 ---
 

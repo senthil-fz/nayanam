@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { Errors } from '../common/errors';
+import { recordUserEvent } from './me.service';
 
 export type SessionSummary = {
   id: string;
@@ -39,17 +41,24 @@ export class SessionsService {
     const row = await this.prisma.session.findFirst({ where: { id: sessionId, userId } });
     if (!row) throw Errors.notFound();
     if (row.revokedAt) return;
-    await this.prisma.session.update({
-      where: { id: sessionId },
-      data: { revokedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.session.update({
+        where: { id: sessionId },
+        data: { revokedAt: new Date() },
+      });
+      await recordUserEvent(tx, userId, null, EventType.USER_SESSION_REVOKED, { sessionId });
     });
   }
 
   async revokeAllOthers(userId: string, currentSessionId: string): Promise<{ revokedCount: number }> {
-    const result = await this.prisma.session.updateMany({
-      where: { userId, revokedAt: null, NOT: { id: currentSessionId } },
-      data: { revokedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.session.updateMany({
+        where: { userId, revokedAt: null, NOT: { id: currentSessionId } },
+        data: { revokedAt: new Date() },
+      });
+      const out = { revokedCount: result.count };
+      await recordUserEvent(tx, userId, null, EventType.USER_ALL_SESSIONS_REVOKED, out);
+      return out;
     });
-    return { revokedCount: result.count };
   }
 }

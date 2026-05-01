@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "test": "pnpm -r --parallel test",
     "dev:infra": "docker compose up -d",
     "dev:infra:stop": "docker compose down",
     "dev:db:migrate": "docker compose run --rm liquibase",

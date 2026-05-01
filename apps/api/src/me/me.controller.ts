@@ -8,12 +8,11 @@ import {
   Param,
   Patch,
   Post,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthContext } from '../common/context';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,7 +20,7 @@ import { AuthService } from '../auth/auth.service';
 import { newId } from '../common/ids';
 import { Errors } from '../common/errors';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
-import { MeService, recordUserEvent } from './me.service';
+import { MeService } from './me.service';
 import { EmailChangeService } from './email-change.service';
 import { SessionsService } from './sessions.service';
 import { SecurityService } from './security.service';
@@ -44,7 +43,6 @@ const PushTokenSchema = z.object({
 class PushTokenDto extends createZodDto(PushTokenSchema) {}
 
 @Controller({ path: 'me', version: '1' })
-@UseGuards(JwtAuthGuard)
 export class MeController {
   constructor(
     private readonly prisma: PrismaService,
@@ -85,24 +83,11 @@ export class MeController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async updateMe(@CurrentUser() ctx: AuthContext, @Body() body: UpdateMeDto) {
-    const { profile, changed, before, after } = await this.me.updateProfile(ctx.userId, {
+    const { profile } = await this.me.updateProfile(ctx.userId, {
       name: body.name === undefined ? undefined : body.name ?? null,
       primaryCurrencyCode:
         body.primaryCurrencyCode === undefined ? undefined : body.primaryCurrencyCode ?? null,
     });
-    if (changed.includes('name')) {
-      await recordUserEvent(this.prisma, ctx.userId, null, 'user.profile_updated', {
-        changedFields: ['name'],
-        before: { name: before.name },
-        after: { name: after.name },
-      });
-    }
-    if (changed.includes('primaryCurrencyCode')) {
-      await recordUserEvent(this.prisma, ctx.userId, null, 'user.primary_currency_changed', {
-        before: before.primaryCurrencyCode,
-        after: after.primaryCurrencyCode,
-      });
-    }
     return { profile };
   }
 
@@ -116,14 +101,11 @@ export class MeController {
   }
 
   @Post('change-email/verify')
+  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async verifyEmailChange(@CurrentUser() ctx: AuthContext, @Body() body: VerifyEmailChangeDto) {
-    const result = await this.emailChange.verify(ctx.userId, body.otp);
-    await recordUserEvent(this.prisma, ctx.userId, null, 'user.email_changed', {
-      oldEmailMasked: result.oldEmailMasked,
-      newEmailMasked: result.newEmailMasked,
-    });
+    await this.emailChange.verify(ctx.userId, body.otp);
     const profile = await this.me.getProfile(ctx.userId);
     return { profile };
   }
@@ -140,7 +122,6 @@ export class MeController {
   @UseInterceptors(IdempotencyInterceptor)
   async revokeSession(@CurrentUser() ctx: AuthContext, @Param('sessionId') sessionId: string) {
     await this.sessions.revoke(ctx.userId, sessionId, ctx.sessionId);
-    await recordUserEvent(this.prisma, ctx.userId, null, 'user.session_revoked', { sessionId });
     return { revoked: true };
   }
 
@@ -148,9 +129,7 @@ export class MeController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async revokeAllOthers(@CurrentUser() ctx: AuthContext) {
-    const result = await this.sessions.revokeAllOthers(ctx.userId, ctx.sessionId);
-    await recordUserEvent(this.prisma, ctx.userId, null, 'user.all_sessions_revoked', result);
-    return result;
+    return this.sessions.revokeAllOthers(ctx.userId, ctx.sessionId);
   }
 
   // ---- security ----
@@ -164,26 +143,24 @@ export class MeController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async updateSecurity(@CurrentUser() ctx: AuthContext, @Body() body: UpdateSecurityDto) {
-    const { status, changedFlags } = await this.security.update(ctx.userId, {
+    const { status } = await this.security.update(ctx.userId, {
       biometricEnabled: body.biometricEnabled,
       pin: body.pin === undefined ? undefined : body.pin,
       currentPin: body.currentPin,
     });
-    if (Object.keys(changedFlags).length > 0) {
-      await recordUserEvent(this.prisma, ctx.userId, null, 'user.security_updated', {
-        flags: changedFlags,
-      });
-    }
     return status;
   }
 
   @Post('security/verify-pin')
+  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
   async verifyPin(@CurrentUser() ctx: AuthContext, @Body() body: VerifyPinDto) {
     return this.security.verifyPin(ctx.userId, body.pin);
   }
 
   @Post('security/reset-pin')
+  @Throttle({ ip: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async resetPin(@CurrentUser() ctx: AuthContext, @Body() body: ResetPinDto) {
@@ -191,9 +168,6 @@ export class MeController {
     const subject = await this.auth.verifyOtpTokenForSecurity(body.otpToken);
     if (subject !== ctx.userId) throw Errors.authTokenInvalid();
     await this.security.resetPinWithOtpToken(ctx.userId, body.newPin);
-    await recordUserEvent(this.prisma, ctx.userId, null, 'user.security_updated', {
-      flags: { pinSet: true, reason: 'reset' },
-    });
     return { ok: true };
   }
 
@@ -211,12 +185,7 @@ export class MeController {
     @CurrentUser() ctx: AuthContext,
     @Body() body: UpdateNotificationPreferencesDto,
   ) {
-    const { dto, changed } = await this.prefs.update(ctx.userId, body);
-    if (changed.length > 0) {
-      await recordUserEvent(this.prisma, ctx.userId, null, 'user.notification_preferences_updated', {
-        changedFields: changed,
-      });
-    }
+    const { dto } = await this.prefs.update(ctx.userId, body);
     return dto;
   }
 
@@ -224,6 +193,7 @@ export class MeController {
 
   @Post('push-tokens')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   async registerPushToken(@CurrentUser() ctx: AuthContext, @Body() body: PushTokenDto) {
     const existing = await this.prisma.notificationToken.findUnique({
       where: { userId_token: { userId: ctx.userId, token: body.token } },
@@ -253,6 +223,7 @@ export class MeController {
 
   @Delete('push-tokens/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(IdempotencyInterceptor)
   async deletePushToken(@CurrentUser() ctx: AuthContext, @Param('id') id: string) {
     await this.prisma.notificationToken.deleteMany({ where: { id, userId: ctx.userId } });
   }

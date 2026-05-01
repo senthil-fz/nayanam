@@ -57,6 +57,6 @@ export class UpdateNotificationPreferencesDto extends createZodDto(
 
 export const VerifyOtpForSecuritySchema = z.object({
   email: z.string().email(),
-  code: z.string().regex(/^\d{6}$/),
+  otp: z.string().regex(/^\d{6}$/),
 });
 export class VerifyOtpForSecurityDto extends createZodDto(VerifyOtpForSecuritySchema) {}

@@ -16,6 +16,8 @@
  * low (documented).
  */
 
+import { Errors } from '../common/errors';
+
 export type Cycle = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'CUSTOM_DAYS';
 
 export function advance(from: Date, cycle: Cycle, customDays?: number | null): Date {
@@ -30,7 +32,7 @@ export function advance(from: Date, cycle: Cycle, customDays?: number | null): D
       return addMonthsClampedUTC(from, 12);
     case 'CUSTOM_DAYS': {
       if (!customDays || customDays < 1) {
-        throw new Error('customDays required for CUSTOM_DAYS cycle');
+        throw Errors.billCustomDaysRequired();
       }
       return addDaysUTC(from, customDays);
     }
@@ -53,7 +55,7 @@ export function normalizedMonthlyCostMinor(
       return amountMinor / 12n;
     case 'CUSTOM_DAYS': {
       if (!customDays || customDays < 1) {
-        throw new Error('customDays required for CUSTOM_DAYS cycle');
+        throw Errors.billCustomDaysRequired();
       }
       return (amountMinor * 30n) / BigInt(customDays);
     }

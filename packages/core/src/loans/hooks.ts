@@ -61,6 +61,7 @@ export type ComputeLoanVars = {
   extraMonthlyMinor?: string;
   lumpSums?: LoanLumpSumInputType[];
   comparisonBaseline?: ComparisonBaseline;
+  idempotencyKey?: string;
 };
 
 function invalidateLoans(qc: QueryClient) {
@@ -172,11 +173,15 @@ export function makeLoanHooks(client: ApiClient) {
   function useComputeLoan() {
     return useMutation({
       mutationFn: (vars: ComputeLoanVars) => {
-        const { loanId, ...body } = vars;
-        return client.computeLoan(loanId, {
-          ...body,
-          comparisonBaseline: body.comparisonBaseline ?? 'saved',
-        });
+        const { loanId, idempotencyKey, ...body } = vars;
+        return client.computeLoan(
+          loanId,
+          {
+            ...body,
+            comparisonBaseline: body.comparisonBaseline ?? 'saved',
+          },
+          idempotencyKey,
+        );
       },
     });
   }

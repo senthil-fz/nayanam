@@ -1,6 +1,25 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { ApiRequestError } from '@nayanam/core';
 import { useRequestOtp, useVerifyOtp } from '../lib/hooks';
+
+export function getAuthErrorMessage(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'AUTH_OTP_INVALID':
+        return 'Invalid or expired code. Please try again.';
+      case 'AUTH_OTP_RATE_LIMITED':
+        return 'Too many attempts. Please wait and try again.';
+      case 'USER_NOT_FOUND':
+        return 'No account found with this email.';
+      case 'VALIDATION_ERROR':
+        return 'Please check your input and try again.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+  return 'Something went wrong. Please try again.';
+}
 
 export const Route = createFileRoute('/auth')({
   component: AuthScreen,
@@ -54,7 +73,7 @@ function AuthScreen() {
           </label>
           {requestOtp.isError && (
             <p className="text-sm text-[var(--color-negative)]">
-              {requestOtp.error.message}
+              {getAuthErrorMessage(requestOtp.error)}
             </p>
           )}
           <button
@@ -97,7 +116,7 @@ function AuthScreen() {
           />
           {verifyOtp.isError && (
             <p className="text-sm text-[var(--color-negative)]">
-              {verifyOtp.error.message}
+              {getAuthErrorMessage(verifyOtp.error)}
             </p>
           )}
           <button

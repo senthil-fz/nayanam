@@ -335,7 +335,7 @@ export class TransfersService {
     if (this.cachedTransferCategoryId) return this.cachedTransferCategoryId;
     const row = await this.categories.findSystemByKey('transfer_system');
     if (!row) {
-      throw new Error(
+      throw Errors.notFound(
         'System TRANSFER category is missing — ensure the phase-3 seed changelog has run.',
       );
     }

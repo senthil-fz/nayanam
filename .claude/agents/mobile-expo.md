@@ -1,7 +1,7 @@
 ---
 name: mobile-expo
 description: Expo / React Native specialist for Nayanam. Builds the iOS + Android app in apps/mobile using Expo Router, NativeWind, TanStack Query, React Hook Form, Zod, Zustand. Shares schemas/hooks/stores with web via packages/core. Invoked by tech-lead in parallel with backend-nest and frontend-react after api-contract has updated the spec.
-model: opus
+model: sonnet
 color: green
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---

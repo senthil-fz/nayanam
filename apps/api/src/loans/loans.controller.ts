@@ -12,7 +12,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { LoansService } from './loans.service';
@@ -25,7 +24,7 @@ import {
 } from './loans.dto';
 
 @Controller({ path: 'loans', version: '1' })
-@UseGuards(JwtAuthGuard, HouseholdHeaderGuard)
+@UseGuards(HouseholdHeaderGuard)
 export class LoansController {
   constructor(private readonly svc: LoansService) {}
 
@@ -85,11 +84,13 @@ export class LoansController {
 
   /**
    * Compute is READ-ONLY. POST is used only because the lump-sum array can
-   * exceed practical URL length. No idempotency interceptor — the server
-   * caches nothing and clients dedupe via React Query.
+   * exceed practical URL length. Phase 11 wires the IdempotencyInterceptor
+   * per spec so a retried POST replays the cached response instead of
+   * recomputing.
    */
   @Post(':id/compute')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(IdempotencyInterceptor)
   compute(@Param('id') id: string, @Body() body: ComputeLoanDto) {
     return this.svc.compute(id, body);
   }

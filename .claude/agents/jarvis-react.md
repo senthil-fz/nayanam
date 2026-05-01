@@ -2,7 +2,7 @@
 name: jarvis-react
 description: Reviews React web code (apps/web/** and the web-consumed parts of packages/core) against the jarvis-react checklist — TanStack Router/Query, RHF + Zod, Zustand patterns, generated client usage, money formatter usage, accessibility, error UX. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: blue
 ---
 

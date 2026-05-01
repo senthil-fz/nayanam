@@ -2,7 +2,7 @@
 name: jarvis-money
 description: Reviews enforcement of the money invariant — amountMinor (BigInt) + currencyCode (ISO 4217), never floats, never Decimal, FX stored separately, shared client formatter. Spans schema, OpenAPI contract, services, and web/mobile renderers. Emits findings as a structured table. Use only when spawned by the jarvis skill.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 color: red
 ---
 

@@ -16,3 +16,14 @@ export const RefreshSchema = z.object({
   refreshToken: z.string().min(10),
 });
 export class RefreshDto extends createZodDto(RefreshSchema) {}
+
+export const OtpVerifyForSecuritySchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6).regex(/^\d{6}$/),
+});
+export class OtpVerifyForSecurityDto extends createZodDto(OtpVerifyForSecuritySchema) {}
+
+export const OtpVerifyForSecurityResponseSchema = z.object({
+  otpToken: z.string(),
+  expiresAt: z.string().datetime(),
+});

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { EventType } from '../common/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
-import { randomToken, sha256Hex } from '../common/hash';
+import { randomToken, hmacInvite } from '../common/hash';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -28,19 +29,22 @@ export class HouseholdsService {
 
   async create(userId: string, name: string, currency?: string) {
     const id = newId();
-    const hh = await this.prisma.household.create({
-      data: {
-        id,
-        name,
-        defaultCurrencyCode: currency ?? 'USD',
-        createdBy: userId,
-        updatedBy: userId,
-      },
+    const hh = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.household.create({
+        data: {
+          id,
+          name,
+          defaultCurrencyCode: currency ?? 'USD',
+          createdBy: userId,
+          updatedBy: userId,
+        },
+      });
+      await tx.householdMember.create({
+        data: { id: newId(), householdId: id, userId, role: 'OWNER' },
+      });
+      await this.recordEventTx(tx, id, userId, EventType.HOUSEHOLD_CREATED, { name });
+      return created;
     });
-    await this.prisma.householdMember.create({
-      data: { id: newId(), householdId: id, userId, role: 'OWNER' },
-    });
-    await this.recordEvent(id, userId, 'household.created', { name });
     return this.toHousehold(hh);
   }
 
@@ -74,12 +78,15 @@ export class HouseholdsService {
     if (patch.iconToken !== undefined) data.iconToken = patch.iconToken ?? null;
     if (patch.colorToken !== undefined) data.colorToken = patch.colorToken ?? null;
 
-    const hh = await this.prisma.household.update({
-      where: { id: householdId },
-      data,
-    });
-    await this.recordEvent(householdId, userId, 'household.updated', {
-      changedFields: Object.keys(patch),
+    const hh = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.household.update({
+        where: { id: householdId },
+        data,
+      });
+      await this.recordEventTx(tx, householdId, userId, EventType.HOUSEHOLD_UPDATED, {
+        changedFields: Object.keys(patch),
+      });
+      return updated;
     });
     return this.toHousehold(hh);
   }
@@ -113,7 +120,7 @@ export class HouseholdsService {
         where: { householdId_userId: { householdId, userId: targetUserId } },
         data: { role },
       });
-      await this.recordEventTx(tx, householdId, actorUserId, 'household.member_role_changed', {
+      await this.recordEventTx(tx, householdId, actorUserId, EventType.MEMBER_ROLE_CHANGED, {
         targetUserId,
         before: target.role,
         after: role,
@@ -150,7 +157,7 @@ export class HouseholdsService {
       await tx.householdMember.delete({
         where: { householdId_userId: { householdId, userId: targetUserId } },
       });
-      await this.recordEventTx(tx, householdId, actorUserId, 'household.member_removed', {
+      await this.recordEventTx(tx, householdId, actorUserId, EventType.MEMBER_REMOVED, {
         targetUserId,
       });
     });
@@ -173,8 +180,8 @@ export class HouseholdsService {
           where: { id: householdId },
           data: { deletedAt: new Date(), updatedBy: userId },
         });
-        await this.recordEventTx(tx, householdId, userId, 'household.member_left', {});
-        await this.recordEventTx(tx, householdId, userId, 'household.deleted', { hard: false });
+        await this.recordEventTx(tx, householdId, userId, EventType.MEMBER_LEFT, {});
+        await this.recordEventTx(tx, householdId, userId, EventType.HOUSEHOLD_DELETED, { hard: false });
       });
       return { left: true, householdDeleted: true };
     }
@@ -191,7 +198,7 @@ export class HouseholdsService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.householdMember.deleteMany({ where: { householdId, userId } });
-      await this.recordEventTx(tx, householdId, userId, 'household.member_left', {});
+      await this.recordEventTx(tx, householdId, userId, EventType.MEMBER_LEFT, {});
     });
     return { left: true, householdDeleted: false };
   }
@@ -219,7 +226,7 @@ export class HouseholdsService {
         where: { id: householdId },
         data: { deletedAt: new Date(), updatedBy: userId },
       });
-      await this.recordEventTx(tx, householdId, userId, 'household.deleted', { hard });
+      await this.recordEventTx(tx, householdId, userId, EventType.HOUSEHOLD_DELETED, { hard });
     });
     return { deleted: true, hard };
   }
@@ -242,6 +249,7 @@ export class HouseholdsService {
               FROM attachments
              WHERE owner_type = 'user'
                AND owner_id = ANY(${userIds}::text[])
+               AND household_id = ${householdId}
                AND status = 'READY'
                AND deleted_at IS NULL
              ORDER BY owner_id, created_at DESC
@@ -292,27 +300,33 @@ export class HouseholdsService {
     if (role === 'OWNER' && requesterRole !== 'OWNER') throw Errors.forbidden('Only OWNER can invite OWNER.');
 
     const token = randomToken(32);
-    const tokenHash = sha256Hex(token);
+    const tokenHash = hmacInvite(token);
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-    const invite = await this.prisma.householdInvite.create({
-      data: {
-        id: newId(),
-        householdId,
-        email: email.trim().toLowerCase(),
+    const invite = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.householdInvite.create({
+        data: {
+          id: newId(),
+          householdId,
+          email: email.trim().toLowerCase(),
+          role,
+          tokenHash,
+          invitedBy: userId,
+          expiresAt,
+        },
+      });
+      await this.recordEventTx(tx, householdId, userId, EventType.INVITE_CREATED, {
+        email,
         role,
-        tokenHash,
-        invitedBy: userId,
-        expiresAt,
-      },
+      });
+      return row;
     });
 
-    // Compose email with an accept link — web handles the route.
-    const webUrl = this.config.get<string>('WEB_URL') ?? 'http://localhost:5173';
+    // Compose email with an accept link — web handles the route. Sent post-commit
+    // so a mail failure does not roll back the invite + audit row.
+    const webUrl = this.config.getOrThrow<string>('WEB_URL');
     const hh = await this.prisma.household.findUnique({ where: { id: householdId } });
     await this.mail.sendInvite(email, hh?.name ?? 'Nayanam', `${webUrl}/invites/accept?token=${token}`);
-
-    await this.recordEvent(householdId, userId, 'household.invite_created', { email, role });
 
     return { ...this.toInvite(invite), token };
   }
@@ -320,15 +334,17 @@ export class HouseholdsService {
   async revokeInvite(userId: string, householdId: string, inviteId: string) {
     const role = await this.assertMember(userId, householdId);
     if (!['OWNER', 'ADMIN'].includes(role)) throw Errors.forbidden();
-    await this.prisma.householdInvite.updateMany({
-      where: { id: inviteId, householdId, revokedAt: null, acceptedAt: null },
-      data: { revokedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.householdInvite.updateMany({
+        where: { id: inviteId, householdId, revokedAt: null, acceptedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await this.recordEventTx(tx, householdId, userId, EventType.INVITE_REVOKED, { inviteId });
     });
-    await this.recordEvent(householdId, userId, 'household.invite_revoked', { inviteId });
   }
 
   async acceptInvite(userId: string, rawToken: string) {
-    const tokenHash = sha256Hex(rawToken);
+    const tokenHash = hmacInvite(rawToken);
     // This lookup intentionally bypasses scoping — it's how we discover the household.
     // We must use a raw client call that doesn't go through the household-scope guard.
     const invite = await this.prisma.$queryRaw<
@@ -353,7 +369,7 @@ export class HouseholdsService {
     if (!user) throw Errors.authTokenInvalid();
     if (user.email.toLowerCase() !== row.email.toLowerCase()) throw Errors.inviteEmailMismatch();
 
-    // Atomic: mark invite accepted + create membership (ignore if already member).
+    // Atomic: mark invite accepted + create membership (ignore if already member) + audit.
     await this.prisma.$transaction(async (tx) => {
       await tx.householdInvite.update({
         where: { id: row.id },
@@ -372,9 +388,10 @@ export class HouseholdsService {
           },
         });
       }
+      await this.recordEventTx(tx, row.household_id, userId, EventType.INVITE_ACCEPTED, {
+        inviteId: row.id,
+      });
     });
-
-    await this.recordEvent(row.household_id, userId, 'household.invite_accepted', { inviteId: row.id });
 
     const hh = await this.prisma.household.findUnique({ where: { id: row.household_id } });
     if (!hh) throw Errors.householdNotFound();
@@ -437,16 +454,11 @@ export class HouseholdsService {
     };
   }
 
-  private async recordEvent(householdId: string, actorId: string, type: string, payload: unknown) {
-    await this.prisma.$executeRaw`INSERT INTO events (id, household_id, actor_id, type, payload)
-      VALUES (${newId()}, ${householdId}, ${actorId}, ${type}, ${JSON.stringify(payload)}::jsonb)`;
-  }
-
   private async recordEventTx(
     tx: Prisma.TransactionClient,
     householdId: string,
     actorId: string | null,
-    type: string,
+    type: EventType,
     payload: unknown,
   ) {
     await tx.$executeRaw`INSERT INTO events (id, household_id, actor_id, type, payload)
