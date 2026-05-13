@@ -1,3 +1,19 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - apps/*
+  - packages/*
+
+catalog:
+  '@tanstack/react-query': ^5.100.10
+  '@vitest/coverage-v8': ^3.2.4
+  react: ^19.2.6
+  react-dom: ^19.2.6
+  typescript: ^6.0.3
+  vite-tsconfig-paths: ^5.1.4
+  vitest: ^3.2.4
+  zod: ^4.4.3
+  zustand: ^5.0.12
+
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - '@swc/core'
+  - prisma

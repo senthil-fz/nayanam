@@ -19,16 +19,16 @@
     "@nayanam/contracts": "workspace:*",
     "@nayanam/core": "workspace:*",
     "@nayanam/ui-tokens": "workspace:*",
-    "@tanstack/react-query": "^5.100.1",
+    "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "^1.168.23",
     "i18next": "^26.0.7",
     "lucide-react": "^1.9.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "react-hook-form": "^7.73.1",
     "react-i18next": "^17.0.4",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.12"
+    "zod": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
@@ -40,10 +40,10 @@
     "@vitejs/plugin-react": "^6.0.1",
     "jsdom": "^26.1.0",
     "tailwindcss": "^4.2.4",
-    "typescript": "^6.0.3",
+    "typescript": "catalog:",
     "vite": "^8.0.10",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.3",
-    "@vitest/coverage-v8": "^3.2.3"
+    "vite-tsconfig-paths": "catalog:",
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:"
   }
 }
