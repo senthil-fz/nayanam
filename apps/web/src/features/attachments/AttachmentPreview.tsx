@@ -50,7 +50,7 @@ export function AttachmentPreview({ attachment, onClose }: Props) {
               <a
                 href={url}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--color-surface-alt)]"
               >
                 Open in new tab

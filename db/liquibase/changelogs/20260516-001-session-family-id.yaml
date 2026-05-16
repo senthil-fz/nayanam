@@ -1,0 +1,97 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260516-001-session-family-id
+      author: nayanam
+      comment: |
+        Security hardening — refresh-token reuse detection (OWASP token-family pattern).
+        Adds family_id (groups all sessions originating from a single login event) and
+        parent_id (nullable, records which session was rotated to produce this one).
+        On replay of a revoked refresh token, the entire family is revoked to contain
+        a stolen-token attack.
+        family_id is backfilled to the session's own id (each historical session is
+        its own family root) via a three-changeset NOT NULL dance.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: sessions
+      changes:
+        - addColumn:
+            tableName: sessions
+            columns:
+              - column:
+                  name: family_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: parent_id
+                  type: VARCHAR(26)
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: sessions
+            columnName: parent_id
+        - dropColumn:
+            tableName: sessions
+            columnName: family_id
+
+  - changeSet:
+      id: 20260516-001-session-family-id-backfill
+      author: nayanam
+      comment: |
+        Backfill family_id to session's own id for all existing rows so the NOT NULL
+        constraint can be applied. Historical sessions each become their own family root.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: sessions
+      changes:
+        - sql:
+            sql: |
+              UPDATE sessions SET family_id = id WHERE family_id IS NULL;
+      rollback:
+        - sql:
+            sql: |
+              UPDATE sessions SET family_id = NULL;
+
+  - changeSet:
+      id: 20260516-001-session-family-id-notnull
+      author: nayanam
+      comment: |
+        Apply NOT NULL constraint on family_id after backfill, then add an index
+        to support fast family-revoke queries (UPDATE WHERE family_id = ?).
+        parent_id stays nullable — it is null for the root session of each family.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: sessions
+      changes:
+        - addNotNullConstraint:
+            tableName: sessions
+            columnName: family_id
+            columnDataType: VARCHAR(26)
+        - addForeignKeyConstraint:
+            baseTableName: sessions
+            baseColumnNames: parent_id
+            constraintName: fk_sessions_parent_id
+            referencedTableName: sessions
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            tableName: sessions
+            indexName: idx_sessions_family_id
+            columns:
+              - column:
+                  name: family_id
+      rollback:
+        - dropIndex:
+            tableName: sessions
+            indexName: idx_sessions_family_id
+        - dropForeignKeyConstraint:
+            baseTableName: sessions
+            constraintName: fk_sessions_parent_id
+        - dropNotNullConstraint:
+            tableName: sessions
+            columnName: family_id
+            columnDataType: VARCHAR(26)

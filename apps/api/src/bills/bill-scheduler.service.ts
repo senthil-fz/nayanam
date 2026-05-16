@@ -106,7 +106,14 @@ export class BillSchedulerService {
     let processed = 0;
     for (const r of rows) {
       try {
-        await this.processBill(r, now);
+        // Each bill runs inside its own household context so that scoped Prisma
+        // delegates resolve correctly. Without this wrap, tx.bill.update and all
+        // notification writes throw HOUSEHOLD_SCOPE_VIOLATION (caught by the
+        // per-bill catch below), silently breaking the feature.
+        // Mirrors the pattern used by budget-scheduler.service.ts (~:87).
+        await requestContext.run({ householdId: r.household_id }, () =>
+          this.processBill(r, now),
+        );
         processed += 1;
       } catch (err: unknown) {
         this.logger.error(

@@ -52,6 +52,7 @@ import { validateEnv } from './config/env.schema';
               'req.headers.cookie',
               'req.headers["x-refresh-token"]',
               'req.body.refreshToken',
+              'req.body.otpToken',
               'req.body.code',
               'req.body.otp',
               'req.body.pin',

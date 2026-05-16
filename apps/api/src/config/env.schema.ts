@@ -56,6 +56,15 @@ export const envSchema = z.object({
   // Recommended for production; falls back to JWT_ACCESS_SECRET when absent.
   JWT_SECURITY_OTP_SECRET: z.string().min(32).optional(),
 
+  // Pepper rotation support. During a rolling pepper rotation:
+  //   1. Set OTP_PEPPER_PREVIOUS to the OLD pepper value.
+  //   2. Set OTP_PEPPER to the NEW pepper value.
+  //   3. Deploy. Verification will accept codes hashed with either pepper.
+  //   4. After all in-flight OTPs (10 min TTL) have expired, clear *_PREVIOUS.
+  // Same pattern applies to REFRESH_PEPPER_PREVIOUS / REFRESH_PEPPER.
+  OTP_PEPPER_PREVIOUS: z.string().min(32).optional(),
+  REFRESH_PEPPER_PREVIOUS: z.string().min(32).optional(),
+
   // ---- app URLs ----
   WEB_URL: z.string().url().default('http://localhost:5173'),
 

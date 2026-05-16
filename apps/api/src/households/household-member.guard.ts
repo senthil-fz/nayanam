@@ -21,8 +21,17 @@ export class HouseholdMemberGuard implements CanActivate {
     const householdId = req.params.id ?? req.params.householdId;
     if (!householdId) throw Errors.householdNotFound();
 
-    const membership = await this.prisma.householdMember.findUnique({
-      where: { householdId_userId: { householdId, userId: user.userId } },
+    // Use findFirst with a relation filter to also assert the household has not
+    // been soft-deleted (archived). findUnique cannot carry relation predicates,
+    // so we switch to findFirst which is semantically equivalent on the composite
+    // (householdId, userId) natural key. HouseholdMember is deliberately excluded
+    // from HOUSEHOLD_SCOPED_MODELS so no extension guard fires here.
+    const membership = await this.prisma.householdMember.findFirst({
+      where: {
+        householdId,
+        userId: user.userId,
+        household: { deletedAt: null },
+      },
     });
     if (!membership) throw Errors.householdNotFound();
 

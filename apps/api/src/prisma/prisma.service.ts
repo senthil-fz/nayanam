@@ -32,6 +32,15 @@ import { Errors } from '../common/errors';
  */
 export const HOUSEHOLD_SCOPED_MODELS = new Set<string>([
   'HouseholdInvite',
+  // NOTE (parity / Finding 6): 'Event' is listed here so that future Prisma
+  // delegate reads (e.g. an activity-feed endpoint) are automatically scoped.
+  // HOWEVER, every current Event write is a raw `$executeRaw` INSERT that
+  // bypasses the `$extends` extension — the entry currently enforces nothing on
+  // writes. Write via raw SQL is intentional (events are emitted inside domain
+  // $transactions with explicit household_id). If you add a read endpoint backed
+  // by `prisma.event.findMany`, the extension will scope it correctly. Never add
+  // an Event write via the Prisma delegate without verifying it carries the
+  // correct `householdId` from the request context.
   'Event',
   'Account',
   'Category',
@@ -230,23 +239,19 @@ export class PrismaService
                 // these ops cannot have householdId injected into the where clause
                 // (Prisma rejects extra fields on unique lookups), so we assert
                 // ownership on the returned row instead.
+                //
+                // Security fix (Finding 4): injectAndAssertFindUnique merges
+                // `householdId: true` into the select (if a narrow select is present)
+                // before executing the query, asserts, then strips the field if the
+                // caller didn't originally request it. This prevents a silent bypass
+                // where `select: { id: true }` caused `rowHh === undefined` and the
+                // old `typeof rowHh === 'string'` guard to pass vacuously.
                 if (
                   operation === 'findUnique' ||
                   operation === 'findUniqueOrThrow'
                 ) {
-                  const result = await query(args);
-                  if (
-                    result !== null &&
-                    result !== undefined &&
-                    typeof result === 'object' &&
-                    householdScoped
-                  ) {
-                    const rowHh = (result as Record<string, unknown>).householdId;
-                    if (typeof rowHh === 'string' && rowHh !== ctxHh) {
-                      throw Errors.householdScopeViolation();
-                    }
-                  }
-                  return result;
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                  return injectAndAssertFindUnique(args as AnyArgs | undefined, ctxHh, householdScoped, query);
                 }
               } else if (SCOPED_WRITE_WHERE_OPS.has(operation)) {
                 args = enforceWhereScope({
@@ -334,6 +339,76 @@ type AnyArgs = {
   update?: Record<string, unknown>;
 } & Record<string, unknown>;
 
+/**
+ * Executes a findUnique/findUniqueOrThrow query with a guaranteed
+ * `householdId` ownership assertion that works even when the caller passed a
+ * narrow `select` that omits `householdId`.
+ *
+ * Strategy (Finding 4 fix):
+ *  1. If `args.select` is present but does NOT include `householdId`, inject
+ *     `householdId: true` before executing so the DB always returns the field.
+ *  2. Assert: if the row is non-null and `householdId` is not a string (i.e.
+ *     the model doesn't carry it, or some anomaly occurred), throw a scope
+ *     violation rather than silently passing (fail-closed).
+ *  3. Strip the injected `householdId` from the result if the caller didn't
+ *     ask for it, preserving the caller's type contract.
+ *
+ * This replaces the old `typeof rowHh === 'string'` guard which silently
+ * passed when `rowHh === undefined` (narrow select omitting the field).
+ */
+export async function injectAndAssertFindUnique(
+  args: AnyArgs | undefined,
+  ctxHh: string | undefined,
+  householdScoped: boolean,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: (args: unknown) => Promise<any>,
+): Promise<unknown> {
+  // Determine whether caller used a narrow select without householdId.
+  const callerSelect =
+    args &&
+    typeof args === 'object' &&
+    'select' in args &&
+    args.select &&
+    typeof args.select === 'object'
+      ? (args.select as Record<string, unknown>)
+      : null;
+  const needsInjection = callerSelect !== null && !callerSelect.householdId;
+
+  const queryArgs = needsInjection
+    ? { ...args, select: { ...callerSelect, householdId: true } }
+    : args;
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const result = await query(queryArgs);
+
+  if (
+    result !== null &&
+    result !== undefined &&
+    typeof result === 'object' &&
+    householdScoped
+  ) {
+    const rowHh = (result as Record<string, unknown>).householdId;
+    // Hard-fail: if householdId is absent (we injected it above for narrow
+    // selects, so absence means the model truly lacks the column), treat it
+    // as a scope violation rather than silently passing.
+    if (typeof rowHh !== 'string') {
+      throw Errors.householdScopeViolation();
+    }
+    if (rowHh !== ctxHh) {
+      throw Errors.householdScopeViolation();
+    }
+
+    // Strip the injected householdId if caller didn't request it.
+    if (needsInjection) {
+      const stripped = { ...(result as Record<string, unknown>) };
+      delete stripped.householdId;
+      return stripped;
+    }
+  }
+
+  return result as unknown;
+}
+
 function applySoftDeleteFilter(args: AnyArgs | undefined): AnyArgs {
   const next: AnyArgs = { ...(args ?? {}) };
   const where = { ...(next.where ?? {}) };
@@ -345,8 +420,19 @@ function applySoftDeleteFilter(args: AnyArgs | undefined): AnyArgs {
 }
 
 function hasNestedKey(where: Record<string, unknown>, key: string): boolean {
-  // Only checks one level deep into AND/OR/NOT — enough to let restore paths
-  // (which pass `{ AND: [{ deletedAt: { not: null } }, …] }`) through.
+  // CONTRACT (one-level only): this function deliberately inspects only one
+  // level into AND/OR/NOT. All current restore paths use a flat structure:
+  //   { AND: [{ deletedAt: { not: null } }, …] }
+  // or set deletedAt directly at the top level.
+  //
+  // IMPORTANT for restore-path authors: if you nest deletedAt more than one
+  // level deep (e.g. { AND: [{ OR: [{ deletedAt: { not: null } }] }] }) this
+  // function will NOT detect it and the soft-delete default filter
+  // `deletedAt IS NULL` will be ANDed on top, producing zero rows (the
+  // predicate self-contradicts). Always keep your deletedAt opt-out at the
+  // immediate child level of AND/OR/NOT or at the top-level where clause.
+  // Recursive traversal was considered and rejected: no current caller needs
+  // it and the one-level contract is easy to verify and maintain.
   for (const k of ['AND', 'OR', 'NOT'] as const) {
     const v = where[k];
     if (Array.isArray(v) && v.some((c) => c && typeof c === 'object' && key in c)) {

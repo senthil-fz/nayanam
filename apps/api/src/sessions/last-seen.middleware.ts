@@ -54,8 +54,8 @@ export class LastSeenMiddleware implements NestMiddleware {
 }
 
 function extractIp(req: Request): string | null {
-  const xf = req.headers['x-forwarded-for'];
-  if (typeof xf === 'string' && xf.length) return xf.split(',')[0]!.trim();
-  return req.socket?.remoteAddress ?? null;
+  // Use Express's derived req.ip which honours trust-proxy rules set in
+  // main.ts — never parse the raw X-Forwarded-For header directly.
+  return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 

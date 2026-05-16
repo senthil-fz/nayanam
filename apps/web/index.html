@@ -4,6 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Nayanam</title>
+
+    <!--
+      Content-Security-Policy (meta fallback).
+      IMPORTANT: A response-header CSP is strongly preferred because:
+        1. <meta> CSP cannot enforce frame-ancestors or sandbox directives.
+        2. The connect-src below is hardcoded for local dev (http://localhost:3000).
+           In production the API origin will differ — the header must be generated
+           server-side with the correct VITE_API_URL value.
+      Ask the hosting team to set the CSP as an HTTP header via a Vite plugin,
+      edge middleware, or CDN rule so the connect-src origin is injected at build
+      time or request time.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        connect-src 'self' http://localhost:3000;
+        script-src 'self';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https:;
+        img-src 'self' data:;
+        object-src 'none';
+        frame-ancestors 'none';
+        base-uri 'self';
+      "
+    />
+    <!-- Referrer policy: send origin only on same-origin, full URL on same-site. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

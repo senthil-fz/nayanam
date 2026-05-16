@@ -220,17 +220,24 @@ export function createApiClient(opts: ApiClientOptions) {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ refreshToken: rt }),
         });
-        if (!res.ok) {
+        // Only treat genuine auth rejections as session termination.
+        // A transient 5xx / 429 / network error does NOT mean the refresh token
+        // is invalid — we return null without clearing so the caller can surface
+        // the original 401 without destroying a valid session.
+        if (res.status === 401 || res.status === 403) {
           await opts.tokens.setTokens(null);
           await opts.tokens.onUnauthenticated();
+          return null;
+        }
+        if (!res.ok) {
+          // Transient error (5xx, 429, etc.) — preserve tokens.
           return null;
         }
         const pair = (await res.json()) as ApiTokenPair;
         await opts.tokens.setTokens(pair);
         return pair.accessToken;
       } catch {
-        await opts.tokens.setTokens(null);
-        await opts.tokens.onUnauthenticated();
+        // Network / parse error — preserve tokens, treat as transient.
         return null;
       } finally {
         refreshInFlight = null;
@@ -269,9 +276,28 @@ export function createApiClient(opts: ApiClientOptions) {
 
     if (res.status === 401 && !o.anonymous) {
       const newToken = await refresh();
-      if (newToken) {
-        headers['authorization'] = `Bearer ${newToken}`;
-        res = await doFetch();
+      if (!newToken) {
+        // refresh() returned null — either auth failed (tokens already cleared) or
+        // a transient error occurred (tokens preserved). Either way, do NOT retry
+        // with a stale/missing token — throw the original 401 as a clean auth error.
+        throw new ApiRequestError({
+          status: 401,
+          code: 'UNAUTHENTICATED',
+          message: 'Session expired or unavailable. Please sign in again.',
+        });
+      }
+      headers['authorization'] = `Bearer ${newToken}`;
+      res = await doFetch();
+      // If the retried request also 401s, the freshly-issued token was rejected —
+      // the session is dead. Clear and redirect before throwing.
+      if (res.status === 401) {
+        await opts.tokens.setTokens(null);
+        await opts.tokens.onUnauthenticated();
+        throw new ApiRequestError({
+          status: 401,
+          code: 'UNAUTHENTICATED',
+          message: 'Session rejected. Please sign in again.',
+        });
       }
     }
 

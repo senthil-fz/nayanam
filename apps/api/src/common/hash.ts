@@ -40,12 +40,20 @@ export function randomOtp(): string {
  * below — do NOT add a raw `process.env[X]` read elsewhere without the schema
  * guard.
  */
-function requireEnv(name: 'OTP_PEPPER' | 'REFRESH_PEPPER' | 'SESSION_SALT' | 'INVITE_PEPPER'): string {
+function requireEnv(
+  name: 'OTP_PEPPER' | 'REFRESH_PEPPER' | 'SESSION_SALT' | 'INVITE_PEPPER',
+): string {
   // Boot-time env validation (config/env.schema.ts) guarantees presence; this
   // throw is a defensive backstop rather than a runtime contract.
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not configured`);
   return v;
+}
+
+function optionalEnv(
+  name: 'OTP_PEPPER_PREVIOUS' | 'REFRESH_PEPPER_PREVIOUS',
+): string | undefined {
+  return process.env[name] ?? undefined;
 }
 
 /** HMAC-SHA-256(OTP) keyed by OTP_PEPPER. Hex, 64 chars. At-rest hash. */
@@ -85,4 +93,39 @@ export function timingSafeEqualHex(a: string, b: string): boolean {
   }
   if (bufA.length !== bufB.length || bufA.length === 0) return false;
   return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Verify a plaintext OTP against a stored hash.
+ *
+ * Supports pepper rotation: if OTP_PEPPER_PREVIOUS is set, the stored hash is
+ * tested against both the current and the previous pepper. This allows a
+ * rolling rotation without forcing a mass-invalidation of in-flight OTPs.
+ *
+ * Always uses constant-time comparison regardless of which pepper branch is
+ * taken. Returns true if either pepper matches.
+ */
+export function verifyHmacOtp(plain: string, storedHash: string): boolean {
+  const currentMatch = timingSafeEqualHex(storedHash, hmacOtp(plain));
+  const prev = optionalEnv('OTP_PEPPER_PREVIOUS');
+  if (!prev) return currentMatch;
+  const prevHash = createHmac('sha256', prev).update(plain).digest('hex');
+  // Always evaluate both branches to equalize timing regardless of outcome.
+  const prevMatch = timingSafeEqualHex(storedHash, prevHash);
+  return currentMatch || prevMatch;
+}
+
+/**
+ * Verify a plaintext refresh token against a stored hash.
+ *
+ * Same dual-pepper logic as verifyHmacOtp — supports graceful rotation of
+ * REFRESH_PEPPER without mass-logging-out every user.
+ */
+export function verifyHmacRefresh(plain: string, storedHash: string): boolean {
+  const currentMatch = timingSafeEqualHex(storedHash, hmacRefresh(plain));
+  const prev = optionalEnv('REFRESH_PEPPER_PREVIOUS');
+  if (!prev) return currentMatch;
+  const prevHash = createHmac('sha256', prev).update(plain).digest('hex');
+  const prevMatch = timingSafeEqualHex(storedHash, prevHash);
+  return currentMatch || prevMatch;
 }

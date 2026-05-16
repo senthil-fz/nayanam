@@ -1,5 +1,5 @@
 import '../global.css';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Redirect, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,9 +22,8 @@ import { UnlockGate } from '../src/features/settings/security/UnlockGate';
 
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
-  const router = useRouter();
-  const segments = useSegments();
   const refreshToken = useAuthStore((s) => s.refreshToken);
+  const segments = useSegments();
 
   // Phase 5 push handlers — idempotent install.
   useEffect(() => {
@@ -51,18 +50,18 @@ export default function RootLayout() {
     return unsub;
   }, []);
 
-  // Route-guard: push to /auth if no session once hydrated.
-  useEffect(() => {
-    if (!hydrated) return;
-    const inAuthGroup = segments[0] === 'auth';
-    if (!refreshToken && !inAuthGroup) {
-      router.replace('/auth');
-    } else if (refreshToken && inAuthGroup) {
-      router.replace('/');
-    }
-  }, [hydrated, refreshToken, segments, router]);
-
+  // Block render until SecureStore tokens are loaded — no premature redirects.
   if (!hydrated) return null;
+
+  // SECURITY: Declarative auth guard — no useEffect race.
+  //
+  // Because hydration is complete before we reach this point, `refreshToken`
+  // reflects the real persisted value. The guard fires during the render pass,
+  // not in a useEffect, so the Stack is never instantiated with stale auth
+  // state and no protected component ever mounts unauthenticated.
+  const inAuthGroup = segments[0] === 'auth';
+  if (!refreshToken && !inAuthGroup) return <Redirect href="/auth" />;
+  if (refreshToken && inAuthGroup) return <Redirect href="/" />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

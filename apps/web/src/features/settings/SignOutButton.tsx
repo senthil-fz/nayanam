@@ -1,12 +1,24 @@
 // Sign-out CTA with a confirm step. Upgrades the Phase 4 stub.
 
 import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Dialog } from '../../components/Dialog';
 import { useLogout } from '../../lib/hooks';
 
 export function SignOutButton() {
   const [open, setOpen] = useState(false);
   const logout = useLogout();
+  const navigate = useNavigate();
+
+  function handleSignOut() {
+    logout.mutate(undefined, {
+      onSettled: () => {
+        // Navigate to /auth after state is cleared, replacing history so the
+        // user can't hit Back to return to a shell with empty auth state.
+        void navigate({ to: '/auth', replace: true });
+      },
+    });
+  }
 
   return (
     <>
@@ -31,7 +43,7 @@ export function SignOutButton() {
           </button>
           <button
             type="button"
-            onClick={() => logout.mutate()}
+            onClick={handleSignOut}
             disabled={logout.isPending}
             className="rounded-full bg-[var(--color-negative)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >

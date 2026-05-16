@@ -61,8 +61,14 @@ export const PinForgotSheet = forwardRef<PinForgotSheetHandle, object>(
 
     const onRequest = async () => {
       if (!email.trim()) return;
+      // SECURITY: always use the server-confirmed email from the profile —
+      // never send the displayed/client-supplied value. This prevents an
+      // attacker who holds the device from resetting the PIN via an email
+      // they control (Finding #6).
+      const confirmedEmail = me.data?.user.email;
+      if (!confirmedEmail) return;
       try {
-        await request.mutateAsync(email.trim());
+        await request.mutateAsync(confirmedEmail);
         setStage('otp');
       } catch (e) {
         hapticError();
@@ -75,8 +81,11 @@ export const PinForgotSheet = forwardRef<PinForgotSheetHandle, object>(
 
     const onVerify = async () => {
       if (otp.length !== 6) return;
+      // SECURITY: use the server-confirmed email, not the displayed value.
+      const confirmedEmail = me.data?.user.email;
+      if (!confirmedEmail) return;
       try {
-        const res = await verify.mutateAsync({ email: email.trim(), otp });
+        const res = await verify.mutateAsync({ email: confirmedEmail, otp });
         setOtpToken(res.otpToken);
         setStage('pin');
       } catch (e) {
@@ -116,16 +125,16 @@ export const PinForgotSheet = forwardRef<PinForgotSheetHandle, object>(
             </Text>
             <View>
               <FormLabel text="Email" />
+              {/* SECURITY: read-only — email is sourced from the authenticated
+                  profile and cannot be edited by the user (Finding #6). */}
               <TextInput
-                accessibilityLabel="Email"
-                value={email}
-                onChangeText={setEmail}
+                accessibilityLabel="Email (read-only)"
+                value={me.data?.user.email ?? email}
+                editable={false}
                 autoCapitalize="none"
                 autoComplete="email"
                 keyboardType="email-address"
-                placeholder="you@example.com"
-                placeholderTextColor={LIGHT.textFaint}
-                style={inputStyle}
+                style={[inputStyle, { color: LIGHT.textDim }]}
               />
             </View>
             <View

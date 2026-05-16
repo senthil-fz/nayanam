@@ -33,7 +33,9 @@ async function bootstrap() {
 
   app.use(express.json({ limit: '1mb' }));
 
-  app.enableCors({ origin: corsOrigins, credentials: true });
+  // Auth is Bearer-header only; no auth cookie is issued in v1, so
+  // credentials:true is unnecessary and slightly widens the CORS contract.
+  app.enableCors({ origin: corsOrigins });
   // NOTE: globalPrefix='api' + version='1' produces /api/v1/... — changing either independently will break URL structure.
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

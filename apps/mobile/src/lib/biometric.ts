@@ -23,12 +23,25 @@ export async function setBiometricEnabled(enabled: boolean): Promise<void> {
   }
 }
 
-export async function promptBiometric(reason = 'Unlock Nayanam'): Promise<boolean> {
+/** Tri-state result of a biometric prompt. */
+export type BiometricResult =
+  | 'authenticated' // Hardware present, enrolled, user verified.
+  | 'not_available' // No hardware or no enrolled biometrics — NOT authenticated.
+  | 'failed'; // Hardware present but prompt was denied/cancelled/error.
+
+/**
+ * Prompt for biometric authentication and return a tri-state result.
+ * Returns `'not_available'` when no hardware or enrolment exists — callers
+ * MUST NOT treat this as a successful authentication (it is NOT).
+ */
+export async function promptBiometric(
+  reason = 'Unlock Nayanam',
+): Promise<BiometricResult> {
   const ok = await isBiometricAvailable();
-  if (!ok) return true;
+  if (!ok) return 'not_available';
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage: reason,
     disableDeviceFallback: false,
   });
-  return result.success;
+  return result.success ? 'authenticated' : 'failed';
 }

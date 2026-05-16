@@ -67,10 +67,13 @@ model Session {
   deviceKind       String    @default("other") @map("device_kind")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   ipAddressHash    String?   @map("ip_address_hash")
+  familyId         String    @map("family_id") @db.VarChar(26)
+  parentId         String?   @map("parent_id") @db.VarChar(26)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "idx_sessions_user")
+  @@index([familyId], map: "idx_sessions_family_id")
   @@map("sessions")
 }
 

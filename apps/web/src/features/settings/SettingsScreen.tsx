@@ -2,7 +2,7 @@
 // mirroring the prototype: Profile → Appearance → Notifications → Household
 // → Sessions → Budgets tile → About → Sign out.
 
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Target } from 'lucide-react';
 import { ProfileCard } from './ProfileCard';
 import { AppearanceCard } from './AppearanceCard';
@@ -14,6 +14,8 @@ import { SignOutButton } from './SignOutButton';
 import { SectionGroup, SettingsRow } from './primitives';
 
 export function SettingsScreen() {
+  const navigate = useNavigate();
+
   return (
     <div className="flex flex-col gap-6 pb-6">
       <div>
@@ -38,7 +40,9 @@ export function SettingsScreen() {
           label="Budgets"
           sub="Monthly limits by category"
           onClick={() => {
-            window.location.href = '/settings/budgets';
+            // Use TanStack Router navigate — preserves in-memory access token.
+            // (window.location.href causes a full reload which wipes token state.)
+            void navigate({ to: '/settings/budgets' });
           }}
         />
       </SectionGroup>

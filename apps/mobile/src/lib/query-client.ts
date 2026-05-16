@@ -17,18 +17,17 @@ export const asyncStoragePersister = createAsyncStoragePersister({
 export const persistOptions = {
   persister: asyncStoragePersister,
   maxAge: 24 * 60 * 60 * 1_000, // 24h — server idempotency TTL
-  // Only persist account + summary + history + me queries for now.
+  // SECURITY: Only persist non-sensitive UI-state queries.
+  // DO NOT persist keys containing emails, member lists, full financial
+  // history, or auth-adjacent data — AsyncStorage is plaintext and readable
+  // on rooted/jailbroken devices or via unencrypted device backups.
+  // Excluded: 'me' (email/PII), 'households' (member list / emails),
+  // 'transactions' (full financial history), 'accounts' (balances), 'transfers'.
   dehydrateOptions: {
     shouldDehydrateQuery: (q: { queryKey: readonly unknown[] }) => {
       const root = q.queryKey[0];
-      return (
-        root === 'accounts' ||
-        root === 'me' ||
-        root === 'households' ||
-        root === 'transactions' ||
-        root === 'categories' ||
-        root === 'transfers'
-      );
+      // Only persist low-sensitivity UI reference data (category names/icons).
+      return root === 'categories';
     },
   },
 };

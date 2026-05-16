@@ -63,7 +63,17 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     const method = req.method.toUpperCase();
     const path = (req.baseUrl ?? '') + (req.path ?? '');
-    const requestHash = sha256Hex(canonicalJSON(req.body ?? {}));
+    // Fold X-Household-Id into the hash so that the same (userId, key) pair
+    // across different households returns IDEMPOTENCY_CONFLICT rather than
+    // replaying household-A's cached response for a household-B request.
+    // Uses the empty string when the header is absent (non-household endpoints)
+    // for consistent behaviour.
+    const householdId =
+      req.header('x-household-id') ?? req.header('X-Household-Id') ?? '';
+    const requestHash = sha256Hex(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      canonicalJSON({ body: req.body ?? {}, householdId }),
+    );
 
     return from(
       this.prisma.idempotencyKey.findUnique({
@@ -185,6 +195,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
               .handle()
               .subscribe({
                 next: (body) => resolve(body),
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
                 error: (err: unknown) => reject(err),
               });
           }).then(async (body) => {
