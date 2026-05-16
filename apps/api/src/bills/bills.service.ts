@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type Bill as BillRow, type BillPayment as BillPaymentRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BalanceService } from '../accounts/balance.service';
+import { BudgetsService } from '../budgets/budgets.service';
 import { Errors } from '../common/errors';
 import { newId } from '../common/ids';
 import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/context';
@@ -28,6 +29,7 @@ export class BillsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly balance: BalanceService,
+    private readonly budgets: BudgetsService,
   ) {}
 
   // ---- reads ----
@@ -356,7 +358,6 @@ export class BillsService {
 
         const data: Prisma.BillUpdateInput = { updatedBy: userId, updatedAt: new Date() };
 
-        let newAccountCurrency = existing.currencyCode;
         if (patch.accountId && patch.accountId !== existing.accountId) {
           const acct = await tx.account.findFirst({
             where: { id: patch.accountId, householdId, deletedAt: null },
@@ -370,9 +371,7 @@ export class BillsService {
           changed.push('accountId');
           before.accountId = existing.accountId;
           after.accountId = patch.accountId;
-          newAccountCurrency = acct.currencyCode;
         }
-        void newAccountCurrency;
 
         if (patch.categoryId && patch.categoryId !== existing.categoryId) {
           const cat = await tx.category.findFirst({
@@ -471,6 +470,11 @@ export class BillsService {
           changed.push('nextDueAt');
           before.nextDueAt = existing.nextDueAt.toISOString();
           after.nextDueAt = newNextDueAt.toISOString();
+          // H2: reset notification cursors so the scheduler re-evaluates on the
+          // new cycle boundary (stale cursors from the old cycle would suppress
+          // due-soon / overdue notifications forever).
+          data.lastNotifiedDueSoonAt = null;
+          data.lastNotifiedOverdueAt = null;
         }
 
         if (patch.endAt !== undefined) {
@@ -746,7 +750,7 @@ export class BillsService {
   }> {
     const householdId = getHouseholdOrThrow();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Lock the bill row for the duration of this mark-paid.
       await tx.$queryRaw`SELECT id FROM bills WHERE id = ${id} FOR UPDATE`;
 
@@ -847,8 +851,22 @@ export class BillsService {
         billId: id,
       });
 
-      return { bill: updatedBill, payment, transaction: txRow };
+      // Budget threshold evaluation — inside the same transaction so any
+      // threshold/notification writes are atomic with the payment write.
+      const pushes = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [existing.categoryId],
+        [existing.currencyCode],
+      );
+
+      return { bill: updatedBill, payment, transaction: txRow, pushes };
     });
+
+    // Dispatch push notifications BEST-EFFORT after the transaction commits.
+    await this.budgets.flushPushQueue(result.pushes);
+
+    return { bill: result.bill, payment: result.payment, transaction: result.transaction };
   }
 
   // ---- payments listing / undo ----
@@ -961,8 +979,20 @@ export class BillsService {
         transactionId: reversedTxId,
       });
 
-      return { bill: updatedBill, payment: updatedPayment };
+      // Budget threshold evaluation — re-evaluate after the reversal so budgets
+      // can recalculate spend for the affected category/currency.
+      const pushes = await this.budgets.evaluateForTransactionMutation(
+        tx,
+        householdId,
+        [bill.categoryId],
+        [bill.currencyCode],
+      );
+
+      return { bill: updatedBill, payment: updatedPayment, pushes };
     });
+
+    // Dispatch push notifications BEST-EFFORT after the transaction commits.
+    await this.budgets.flushPushQueue(result.pushes);
 
     return { bill: billToDTO(result.bill), payment: paymentToDTO(result.payment) };
   }

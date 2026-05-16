@@ -1,5 +1,30 @@
 import { z } from 'zod';
+import {
+  AttachmentOwnerTypeEnum,
+  AttachmentMimeEnum,
+  AttachmentStatusEnum,
+  ATTACHMENT_SIZE_CAPS,
+  PresignUploadInput,
+  type AttachmentOwnerType,
+  type AttachmentMime,
+  type AttachmentStatus,
+  type Attachment,
+  type PresignUploadResponseType,
+  type AttachmentDownloadUrlResponseType,
+} from '@nayanam/core/attachments/schemas';
 
+/**
+ * Attachments DTOs. Enums, size caps, the presign input schema and the wire
+ * types come from the shared `@nayanam/core` schemas (B4). The MIME allowlist
+ * and the image-MIME set below are server-enforcement constants — kept local
+ * but derived from the shared `AttachmentMimeEnum`.
+ */
+
+export { ATTACHMENT_SIZE_CAPS };
+export type { AttachmentOwnerType, AttachmentMime, AttachmentStatus };
+
+// Server-side MIME allowlist — the exact set of the shared enum, as a tuple so
+// `.includes()` keeps its narrowed element type.
 export const ATTACHMENT_MIME_ALLOWLIST = [
   'image/jpeg',
   'image/png',
@@ -7,7 +32,6 @@ export const ATTACHMENT_MIME_ALLOWLIST = [
   'image/webp',
   'application/pdf',
 ] as const;
-export type AttachmentMime = (typeof ATTACHMENT_MIME_ALLOWLIST)[number];
 
 export const IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/jpeg',
@@ -16,33 +40,16 @@ export const IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/webp',
 ]);
 
-export const ATTACHMENT_SIZE_CAPS: Record<AttachmentMime, number> = {
-  'image/jpeg': 10 * 1024 * 1024,
-  'image/png': 10 * 1024 * 1024,
-  'image/heic': 10 * 1024 * 1024,
-  'image/webp': 10 * 1024 * 1024,
-  'application/pdf': 25 * 1024 * 1024,
-};
+export const AttachmentOwnerTypeSchema = AttachmentOwnerTypeEnum;
+export const AttachmentMimeSchema = AttachmentMimeEnum;
+export const AttachmentStatusSchema = AttachmentStatusEnum;
 
-export const AttachmentOwnerTypeSchema = z.enum(['transaction', 'user', 'household']);
-export type AttachmentOwnerType = z.infer<typeof AttachmentOwnerTypeSchema>;
-
-export const AttachmentMimeSchema = z.enum(ATTACHMENT_MIME_ALLOWLIST);
-
-export const AttachmentStatusSchema = z.enum(['PENDING', 'READY', 'FAILED']);
-export type AttachmentStatus = z.infer<typeof AttachmentStatusSchema>;
-
-export const PresignUploadInputSchema = z.object({
-  ownerType: AttachmentOwnerTypeSchema,
-  ownerId: z.string().min(1),
-  filename: z.string().min(1).max(255),
-  mime: AttachmentMimeSchema,
-  size: z.string().regex(/^[1-9][0-9]*$/),
-});
+export const PresignUploadInputSchema = PresignUploadInput;
 export type PresignUploadDto = z.infer<typeof PresignUploadInputSchema>;
 
+// Local — Express string-coercion variant of the core typed query shape.
 export const ListAttachmentsQuerySchema = z.object({
-  ownerType: AttachmentOwnerTypeSchema,
+  ownerType: AttachmentOwnerTypeEnum,
   ownerId: z.string().min(1),
   includeFailed: z
     .string()
@@ -55,39 +62,7 @@ export const ListAttachmentsQuerySchema = z.object({
 });
 export type ListAttachmentsQuery = z.infer<typeof ListAttachmentsQuerySchema>;
 
-export type AttachmentDTO = {
-  id: string;
-  householdId: string;
-  ownerType: AttachmentOwnerType;
-  ownerId: string;
-  key: string;
-  mime: AttachmentMime;
-  /** byte size as decimal string (bigint-safe over JSON). */
-  size: string;
-  originalFilename: string;
-  thumbKey: string | null;
-  width: number | null;
-  height: number | null;
-  status: AttachmentStatus;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-  /** Transport-only; present only when URLs have been minted. */
-  downloadUrl?: string;
-  thumbUrl?: string | null;
-  urlExpiresAt?: string;
-};
-
-export type PresignUploadResponseDTO = {
-  attachmentId: string;
-  key: string;
-  uploadUrl: string;
-  requiredHeaders: Record<string, string>;
-  expiresAt: string;
-};
-
-export type AttachmentDownloadUrlResponseDTO = {
-  url: string;
-  expiresAt: string;
-};
+/** Wire shapes — shared `Attachment` types from core. */
+export type AttachmentDTO = Attachment;
+export type PresignUploadResponseDTO = PresignUploadResponseType;
+export type AttachmentDownloadUrlResponseDTO = AttachmentDownloadUrlResponseType;

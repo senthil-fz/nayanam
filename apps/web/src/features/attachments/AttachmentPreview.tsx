@@ -73,6 +73,7 @@ export function AttachmentPreview({ attachment, onClose }: Props) {
               src={url}
               title={attachment.originalFilename}
               className="h-full w-full bg-white"
+              sandbox="allow-same-origin"
             />
           ) : (
             <img

@@ -1,30 +1,18 @@
-import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import {
+  CreateTransferInputBase,
+  type Transfer,
+} from '@nayanam/core/transactions/schemas';
 
-const PositiveMinorSchema = z
-  .string()
-  .regex(/^[1-9]\d*$/, 'Amount must be a positive integer string in minor units.');
+/**
+ * Transfers DTOs. The request body is the shared `CreateTransferInputBase`
+ * (B4) — the un-refined field shape. The server accepts a same-account
+ * transfer through validation on purpose so the service can reject it with
+ * the stable `TRANSFER_SAME_ACCOUNT` code instead of a generic
+ * VALIDATION_ERROR. Web/mobile forms use the refined `CreateTransferInput`.
+ */
 
-export const CreateTransferSchema = z.object({
-  sourceAccountId: z.string().min(1),
-  destinationAccountId: z.string().min(1),
-  amountMinor: PositiveMinorSchema,
-  currencyCode: z.string().regex(/^[A-Z]{3}$/),
-  occurredAt: z.string().datetime().optional(),
-  note: z.string().max(500).nullable().optional(),
-});
-export class CreateTransferDto extends createZodDto(CreateTransferSchema) {}
+export class CreateTransferDto extends createZodDto(CreateTransferInputBase) {}
 
-export type TransferDTO = {
-  id: string;
-  householdId: string;
-  sourceAccountId: string;
-  destinationAccountId: string;
-  amountMinor: string;
-  currencyCode: string;
-  occurredAt: string;
-  note: string | null;
-  deletedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+/** Wire shape for a transfer row — the shared `Transfer` type from core. */
+export type TransferDTO = Transfer;

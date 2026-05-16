@@ -30,8 +30,6 @@ import {
   computeSchedule,
 } from './amortization';
 
-type AnyTx = Prisma.TransactionClient;
-
 const VIEWER: HouseholdRole = 'VIEWER';
 const MEMBER: HouseholdRole = 'MEMBER';
 const ADMIN: HouseholdRole = 'ADMIN';
@@ -982,4 +980,4 @@ function mapLoanUniqueViolation(err: unknown, name: string): Error {
   return err as Error;
 }
 
-void (null as unknown as AnyTx); // keep AnyTx imported for future helpers
+

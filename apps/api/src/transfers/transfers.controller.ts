@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
+import { MandatoryIdempotencyInterceptor } from '../common/mandatory-idempotency.interceptor';
 import { TransfersService } from './transfers.service';
 import { CreateTransferDto } from './transfers.dto';
 import { Errors } from '../common/errors';
@@ -24,7 +25,7 @@ export class TransfersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(IdempotencyInterceptor)
+  @UseInterceptors(MandatoryIdempotencyInterceptor)
   create(@Body() body: CreateTransferDto) {
     return this.svc.create(body);
   }

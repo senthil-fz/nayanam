@@ -6,29 +6,20 @@
     <title>Nayanam</title>
 
     <!--
-      Content-Security-Policy (meta fallback).
-      IMPORTANT: A response-header CSP is strongly preferred because:
-        1. <meta> CSP cannot enforce frame-ancestors or sandbox directives.
-        2. The connect-src below is hardcoded for local dev (http://localhost:3000).
-           In production the API origin will differ — the header must be generated
-           server-side with the correct VITE_API_URL value.
-      Ask the hosting team to set the CSP as an HTTP header via a Vite plugin,
-      edge middleware, or CDN rule so the connect-src origin is injected at build
-      time or request time.
+      Content-Security-Policy (meta FALLBACK only — limited effectiveness).
+
+      IMPORTANT: The authoritative CSP is set as an HTTP response header by the
+      Vite plugin in vite.config.ts (dev/preview) and MUST be mirrored at the
+      edge/CDN in production with the correct VITE_API_URL injected into connect-src.
+
+      Limitations of this <meta> tag:
+        1. frame-ancestors is silently ignored — X-Frame-Options / the HTTP header
+           CSP are the only effective clickjacking protection.
+        2. connect-src here is a local-dev fallback; production needs the real API origin.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="
-        default-src 'self';
-        connect-src 'self' http://localhost:3000;
-        script-src 'self';
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        font-src 'self' https:;
-        img-src 'self' data:;
-        object-src 'none';
-        frame-ancestors 'none';
-        base-uri 'self';
-      "
+      content="default-src 'self'; connect-src 'self' http://localhost:3000; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https:; img-src 'self' data: blob:; object-src 'none'; base-uri 'self';"
     />
     <!-- Referrer policy: send origin only on same-origin, full URL on same-site. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />

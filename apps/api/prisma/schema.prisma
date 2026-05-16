@@ -3,6 +3,11 @@
 // This file is hand-authored to match the Phase 1 Liquibase changelog;
 // run `pnpm --filter @nayanam/api prisma:pull` after `pnpm dev:db:migrate` to
 // regenerate it from the live schema and confirm zero drift.
+//
+// FK onDelete policy: core financial tables (Account/Transaction/Transfer/Bill/Loan)
+// use Restrict (default) so household deletion cannot silently erase financial history;
+// membership/access tables (HouseholdMember/HouseholdInvite) and derived/auxiliary tables
+// (Category/Budget/Attachment/Event/Notification) use Cascade — this matches Liquibase exactly.
 
 generator client {
   provider        = "prisma-client-js"
@@ -48,6 +53,7 @@ model OtpCode {
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
   attempts   Int       @default(0)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([email, purpose, expiresAt], map: "idx_otp_codes_email_purpose")
   @@map("otp_codes")

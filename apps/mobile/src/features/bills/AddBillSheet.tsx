@@ -25,6 +25,7 @@ import type { Account, Category } from '@nayanam/core';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useCreateBill } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import {
   BillFormFields,
   type BillFormValues,
@@ -130,7 +131,7 @@ export const AddBillSheet = forwardRef<AddBillSheetHandle, Props>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Create bill failed', err);
+        logWarn('Create bill failed', err);
       }
     });
 
@@ -179,6 +180,7 @@ export const AddBillSheet = forwardRef<AddBillSheetHandle, Props>(
             />
 
             <Pressable
+              testID="add-bill-submit"
               accessibilityRole="button"
               accessibilityLabel="Save bill"
               disabled={createMut.isPending}

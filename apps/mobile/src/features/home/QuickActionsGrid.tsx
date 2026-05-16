@@ -103,6 +103,7 @@ export function QuickActionsGrid({
       {actions.map((a) => (
         <Pressable
           key={a.key}
+          testID={`home-quickaction-${a.key}`}
           accessibilityRole="button"
           accessibilityLabel={
             a.disabled ? `${a.label} (${a.disabledReason ?? 'disabled'})` : a.label

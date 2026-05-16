@@ -130,19 +130,28 @@ export const TransferSchema = z.object({
 });
 export type Transfer = z.infer<typeof TransferSchema>;
 
-export const CreateTransferInput = z
-  .object({
-    sourceAccountId: z.string().min(1),
-    destinationAccountId: z.string().min(1),
-    amountMinor: PositiveMinorString,
-    currencyCode: CurrencyCode,
-    occurredAt: z.string().datetime().optional(),
-    note: z.string().max(500).nullable().optional(),
-  })
-  .refine((v) => v.sourceAccountId !== v.destinationAccountId, {
+// Un-refined field shape. The API DTO consumes this directly: the server
+// deliberately accepts a same-account transfer through validation so the
+// service can reject it with the stable `TRANSFER_SAME_ACCOUNT` error code
+// rather than a generic VALIDATION_ERROR.
+export const CreateTransferInputBase = z.object({
+  sourceAccountId: z.string().min(1),
+  destinationAccountId: z.string().min(1),
+  amountMinor: PositiveMinorString,
+  currencyCode: CurrencyCode,
+  occurredAt: z.string().datetime().optional(),
+  note: z.string().max(500).nullable().optional(),
+});
+
+// Web/mobile forms use this refined variant for early "accounts must differ"
+// feedback before the request is sent.
+export const CreateTransferInput = CreateTransferInputBase.refine(
+  (v) => v.sourceAccountId !== v.destinationAccountId,
+  {
     message: 'source and destination accounts must differ',
     path: ['destinationAccountId'],
-  });
+  },
+);
 export type CreateTransferInputType = z.infer<typeof CreateTransferInput>;
 
 export const TransferWithPairedTransactionsSchema = z.object({

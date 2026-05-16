@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 export const moneySchema = z.object({
-  amountMinor: z.number().int(),
+  // String-encoded integer to match the DB BigInt and ApiMoney wire format.
+  // Use z.string().regex rather than z.number() — BigInt values exceed
+  // Number.MAX_SAFE_INTEGER for very large amounts and JSON does not support BigInt natively.
+  amountMinor: z.string().regex(/^-?\d+$/, 'amountMinor must be an integer string'),
   currencyCode: z.string().length(3),
 });
 export type Money = z.infer<typeof moneySchema>;
@@ -13,7 +16,13 @@ export const paginationQuerySchema = z.object({
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
 // Auth / identity
-export const emailSchema = z.string().email().transform((s) => s.trim().toLowerCase());
+// `.max(254)` is the RFC 5321 maximum email length — bounds the field before
+// the body-size cap and keeps the API DTOs and the web/mobile forms identical.
+export const emailSchema = z
+  .string()
+  .email()
+  .max(254)
+  .transform((s) => s.trim().toLowerCase());
 
 export const otpRequestSchema = z.object({
   email: emailSchema,

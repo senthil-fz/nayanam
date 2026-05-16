@@ -3,28 +3,137 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.cjs",
+  "module": "./src/index.ts",
+  "types": "./dist/index.d.cts",
   "exports": {
-    ".": "./src/index.ts",
-    "./schemas": "./src/schemas/index.ts",
-    "./stores": "./src/stores/index.ts",
-    "./hooks": "./src/hooks/index.ts",
-    "./utils": "./src/utils/index.ts",
-    "./api": "./src/api/client.ts",
-    "./accounts": "./src/accounts/index.ts",
-    "./categories": "./src/categories/index.ts",
-    "./transactions": "./src/transactions/index.ts",
-    "./bills": "./src/bills/index.ts",
-    "./budgets": "./src/budgets/index.ts",
-    "./notifications": "./src/notifications/index.ts",
-    "./attachments": "./src/attachments/index.ts",
-    "./stats": "./src/stats/index.ts",
-    "./me": "./src/me/index.ts",
-    "./households": "./src/households/index.ts",
-    "./loans": "./src/loans/index.ts"
+    ".": {
+      "import": "./src/index.ts",
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./schemas": {
+      "import": "./src/schemas/index.ts",
+      "require": { "types": "./dist/schemas/index.d.cts", "default": "./dist/schemas/index.cjs" }
+    },
+    "./stores": {
+      "import": "./src/stores/index.ts",
+      "require": { "types": "./dist/stores/index.d.cts", "default": "./dist/stores/index.cjs" }
+    },
+    "./hooks": {
+      "import": "./src/hooks/index.ts",
+      "require": { "types": "./dist/hooks/index.d.cts", "default": "./dist/hooks/index.cjs" }
+    },
+    "./utils": {
+      "import": "./src/utils/index.ts",
+      "require": { "types": "./dist/utils/index.d.cts", "default": "./dist/utils/index.cjs" }
+    },
+    "./api": {
+      "import": "./src/api/client.ts",
+      "require": { "types": "./dist/api/client.d.cts", "default": "./dist/api/client.cjs" }
+    },
+    "./events": {
+      "import": "./src/events/index.ts",
+      "require": { "types": "./dist/events/index.d.cts", "default": "./dist/events/index.cjs" }
+    },
+    "./accounts": {
+      "import": "./src/accounts/index.ts",
+      "require": { "types": "./dist/accounts/schemas.d.cts", "default": "./dist/accounts/schemas.cjs" }
+    },
+    "./categories": {
+      "import": "./src/categories/index.ts",
+      "require": { "types": "./dist/categories/schemas.d.cts", "default": "./dist/categories/schemas.cjs" }
+    },
+    "./transactions": {
+      "import": "./src/transactions/index.ts",
+      "require": { "types": "./dist/transactions/schemas.d.cts", "default": "./dist/transactions/schemas.cjs" }
+    },
+    "./bills": {
+      "import": "./src/bills/index.ts",
+      "require": { "types": "./dist/bills/schemas.d.cts", "default": "./dist/bills/schemas.cjs" }
+    },
+    "./budgets": {
+      "import": "./src/budgets/index.ts",
+      "require": { "types": "./dist/budgets/schemas.d.cts", "default": "./dist/budgets/schemas.cjs" }
+    },
+    "./notifications": {
+      "import": "./src/notifications/index.ts",
+      "require": { "types": "./dist/notifications/schemas.d.cts", "default": "./dist/notifications/schemas.cjs" }
+    },
+    "./attachments": {
+      "import": "./src/attachments/index.ts",
+      "require": { "types": "./dist/attachments/schemas.d.cts", "default": "./dist/attachments/schemas.cjs" }
+    },
+    "./stats": {
+      "import": "./src/stats/index.ts",
+      "require": { "types": "./dist/stats/schemas.d.cts", "default": "./dist/stats/schemas.cjs" }
+    },
+    "./me": {
+      "import": "./src/me/index.ts",
+      "require": { "types": "./dist/me/schemas.d.cts", "default": "./dist/me/schemas.cjs" }
+    },
+    "./households": {
+      "import": "./src/households/index.ts",
+      "require": { "types": "./dist/households/schemas.d.cts", "default": "./dist/households/schemas.cjs" }
+    },
+    "./loans": {
+      "import": "./src/loans/index.ts",
+      "require": { "types": "./dist/loans/schemas.d.cts", "default": "./dist/loans/schemas.cjs" }
+    },
+    "./accounts/schemas": {
+      "import": "./src/accounts/schemas.ts",
+      "require": { "types": "./dist/accounts/schemas.d.cts", "default": "./dist/accounts/schemas.cjs" }
+    },
+    "./categories/schemas": {
+      "import": "./src/categories/schemas.ts",
+      "require": { "types": "./dist/categories/schemas.d.cts", "default": "./dist/categories/schemas.cjs" }
+    },
+    "./transactions/schemas": {
+      "import": "./src/transactions/schemas.ts",
+      "require": { "types": "./dist/transactions/schemas.d.cts", "default": "./dist/transactions/schemas.cjs" }
+    },
+    "./bills/schemas": {
+      "import": "./src/bills/schemas.ts",
+      "require": { "types": "./dist/bills/schemas.d.cts", "default": "./dist/bills/schemas.cjs" }
+    },
+    "./budgets/schemas": {
+      "import": "./src/budgets/schemas.ts",
+      "require": { "types": "./dist/budgets/schemas.d.cts", "default": "./dist/budgets/schemas.cjs" }
+    },
+    "./notifications/schemas": {
+      "import": "./src/notifications/schemas.ts",
+      "require": { "types": "./dist/notifications/schemas.d.cts", "default": "./dist/notifications/schemas.cjs" }
+    },
+    "./attachments/schemas": {
+      "import": "./src/attachments/schemas.ts",
+      "require": { "types": "./dist/attachments/schemas.d.cts", "default": "./dist/attachments/schemas.cjs" }
+    },
+    "./stats/schemas": {
+      "import": "./src/stats/schemas.ts",
+      "require": { "types": "./dist/stats/schemas.d.cts", "default": "./dist/stats/schemas.cjs" }
+    },
+    "./me/schemas": {
+      "import": "./src/me/schemas.ts",
+      "require": { "types": "./dist/me/schemas.d.cts", "default": "./dist/me/schemas.cjs" }
+    },
+    "./households/schemas": {
+      "import": "./src/households/schemas.ts",
+      "require": { "types": "./dist/households/schemas.d.cts", "default": "./dist/households/schemas.cjs" }
+    },
+    "./loans/schemas": {
+      "import": "./src/loans/schemas.ts",
+      "require": { "types": "./dist/loans/schemas.d.cts", "default": "./dist/loans/schemas.cjs" }
+    },
+    "./schemas/index": {
+      "import": "./src/schemas/index.ts",
+      "require": { "types": "./dist/schemas/index.d.cts", "default": "./dist/schemas/index.cjs" }
+    },
+    "./loans/amortization": {
+      "import": "./src/loans/amortization.ts",
+      "require": { "types": "./dist/loans/amortization.d.cts", "default": "./dist/loans/amortization.cjs" }
+    }
   },
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
@@ -42,6 +151,7 @@
   "devDependencies": {
     "@vitest/coverage-v8": "catalog:",
     "react": "catalog:",
+    "tsup": "^8.5.1",
     "typescript": "catalog:",
     "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:"

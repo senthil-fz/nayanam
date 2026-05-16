@@ -1,0 +1,141 @@
+# Nayanam CI — runs on every push to master and every pull_request.
+# Jobs run on ubuntu-latest. Node version is read from .nvmrc at the repo root.
+# Postgres 17 (matching docker-compose.yml) is provisioned as a service container
+# so that the API integration tests under apps/api/test/ can connect to a real DB.
+# Liquibase runs against that service DB before the API test step.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+env:
+  # Credentials used by the Postgres service container AND Liquibase.
+  # These are safe to hard-code for CI — they only exist inside the ephemeral runner.
+  POSTGRES_PASSWORD: nayanam_ci
+  DATABASE_URL: postgresql://nayanam:nayanam_ci@localhost:5432/nayanam?schema=public
+
+jobs:
+  ci:
+    name: Typecheck · Lint · Test · Validate contracts
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Must match the image version in docker-compose.yml (postgres:17).
+        image: postgres:17
+        env:
+          POSTGRES_USER: nayanam
+          POSTGRES_PASSWORD: nayanam_ci
+          POSTGRES_DB: nayanam
+        ports:
+          - 5432:5432
+        # Wait until Postgres is healthy before proceeding.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node + pnpm setup ────────────────────────────────────────────────────
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        # pnpm version is read from the "packageManager" field in package.json.
+
+      - name: Read Node version from .nvmrc
+        id: nvmrc
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.NODE_VERSION }}
+          cache: pnpm
+
+      # ── Install dependencies ─────────────────────────────────────────────────
+      - name: Install dependencies
+        # --frozen-lockfile ensures the lockfile is never silently updated in CI.
+        # This also triggers the `prepare` hook in packages/contracts, which runs
+        # `pnpm generate` (openapi-typescript) so generated.ts exists for typecheck.
+        run: pnpm install --frozen-lockfile
+
+      # ── Build @nayanam/core (CJS dist) ───────────────────────────────────────
+      # The API compiles to CommonJS and resolves @nayanam/core through the
+      # package `exports` `require` condition, which points at the CJS `dist/`
+      # (incl. the `.d.cts` declaration files). That `dist/` must exist on disk
+      # before `pnpm -r typecheck` reaches the API package. Web/mobile are
+      # unaffected — they consume the package `src` directly.
+      - name: Build @nayanam/core
+        run: pnpm --filter @nayanam/core build
+
+      # ── Typecheck ────────────────────────────────────────────────────────────
+      - name: Typecheck (all packages)
+        # pnpm -r runs the script in every workspace package that declares it.
+        # --if-present skips packages that don't have the script instead of failing.
+        run: pnpm -r --if-present typecheck
+
+      # ── Lint ─────────────────────────────────────────────────────────────────
+      - name: Lint (all packages)
+        run: pnpm -r --if-present lint
+
+      # ── Liquibase migrations ─────────────────────────────────────────────────
+      # Run before `pnpm -r test` so the API integration tests find a migrated DB.
+      # We run the Liquibase Docker image directly (no docker-compose profile needed).
+      - name: Run Liquibase migrations
+        run: |
+          docker run --rm \
+            --network=host \
+            -v "$PWD/db/liquibase:/liquibase/changelog" \
+            liquibase/liquibase:4.29 \
+              --defaults-file=/liquibase/changelog/liquibase.properties \
+              --url="jdbc:postgresql://localhost:5432/nayanam" \
+              --username=nayanam \
+              --password="${POSTGRES_PASSWORD}" \
+              --changelog-file=changelog-master.yaml \
+              update
+
+      # ── Generate Prisma client ───────────────────────────────────────────────
+      # Required so the API package can import @prisma/client in tests.
+      - name: Generate Prisma client
+        run: pnpm --filter @nayanam/api prisma:generate
+
+      # ── Tests ────────────────────────────────────────────────────────────────
+      - name: Test (all packages)
+        # Mobile has no `test` script — --if-present silently skips it.
+        run: pnpm -r --if-present test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          # Pass through any API env vars the integration tests expect.
+          # Secrets are CI-safe placeholders; no production values here.
+          JWT_ACCESS_SECRET: ci-access-secret-change-me-please-32chars
+          JWT_REFRESH_SECRET: ci-refresh-secret-change-me-please-32chars
+          OTP_PEPPER: ci-otp-pepper-change-me-please-32-chars
+          REFRESH_PEPPER: ci-refresh-pepper-change-me-please-32chars
+          SESSION_SALT: ci-session-salt-change-me-32-chars-xx
+          S3_ENDPOINT: http://localhost:9000
+          S3_REGION: us-east-1
+          S3_BUCKET: nayanam-attachments
+          S3_ACCESS_KEY: ci-access-key
+          S3_SECRET_KEY: ci-secret-key
+          S3_FORCE_PATH_STYLE: "true"
+          SMTP_HOST: localhost
+          SMTP_PORT: "1025"
+          SMTP_FROM: no-reply@nayanam.local
+          API_PORT: "3000"
+          API_LOG_LEVEL: error
+          API_CORS_ORIGINS: http://localhost:5173
+          JWT_ACCESS_TTL: 15m
+          JWT_REFRESH_TTL: 30d
+
+      # ── Contracts validation ──────────────────────────────────────────────────
+      # Runs `redocly lint openapi.yaml` + the contracts test suite.
+      - name: Validate contracts
+        run: pnpm --filter @nayanam/contracts validate

@@ -251,6 +251,7 @@ export const EditHouseholdSheet = forwardRef<
               onPress={() => inner.current?.dismiss()}
             />
             <PrimaryButton
+              testID="edit-household-submit"
               label="Save"
               onPress={() => void onSave()}
               loading={update.isPending}

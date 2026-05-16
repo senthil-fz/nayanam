@@ -21,6 +21,7 @@ import { formatMoney } from '@nayanam/core';
 import { LIGHT } from '@nayanam/ui-tokens';
 import { useUndoBillPayment } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 
 export type UndoPaymentSheetHandle = {
   present: (args: { bill: Bill; payment: BillPayment }) => void;
@@ -67,7 +68,7 @@ export const UndoPaymentSheet = forwardRef<UndoPaymentSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Undo payment failed', err);
+        logWarn('Undo payment failed', err);
       }
     };
 
@@ -132,6 +133,7 @@ export const UndoPaymentSheet = forwardRef<UndoPaymentSheetHandle>(
               <Text style={{ fontWeight: '600', color: LIGHT.text }}>Cancel</Text>
             </Pressable>
             <Pressable
+              testID="undo-payment-submit"
               accessibilityRole="button"
               accessibilityLabel="Undo payment"
               disabled={pending}

@@ -9,7 +9,18 @@
     "useDefineForClassFields": false,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    // Override the inherited `paths` from tsconfig.base.json. The base maps
+    // `@nayanam/core` / `@nayanam/core/*` to the package `src` (ESM, outside
+    // this project's `rootDir`), which trips "File is not under rootDir" and
+    // the CJS/ESM mismatch. The API instead resolves `@nayanam/core` through
+    // the package `exports` map → the `require` condition → the CJS `dist`.
+    // `@nayanam/contracts` and `@nayanam/ui-tokens` keep their `src` mappings
+    // (paths are resolved against the inherited `baseUrl` = repo root).
+    "paths": {
+      "@nayanam/contracts": ["packages/contracts/src/index.ts"],
+      "@nayanam/ui-tokens": ["packages/ui-tokens/src/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }

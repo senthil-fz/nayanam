@@ -203,10 +203,6 @@ export class TransfersService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const pair = await tx.transaction.findMany({
-        where: { householdId, transferId: id },
-      });
-
       const amount = existing.amountMinor;
       // Reverse both deltas. Source had -amount applied; reverse is +amount.
       await this.balance.applyDelta(
@@ -250,7 +246,6 @@ export class TransfersService {
       );
 
       return this.bundle(updatedTransfer, refreshed);
-      void pair;
     });
     return result;
   }

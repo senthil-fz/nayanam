@@ -35,7 +35,8 @@ export const LoanLumpSumInput = z.object({
   amountMinor: MinorAmountString.refine((s) => Number(s) > 0, {
     message: 'amountMinor must be > 0',
   }),
-  appliedAtMonth: z.number().int().min(1),
+  // `.max(600)` matches the loan term ceiling — was API-DTO-only.
+  appliedAtMonth: z.number().int().min(1).max(600),
   note: z.string().max(200).nullable().optional(),
 });
 export type LoanLumpSumInputType = z.infer<typeof LoanLumpSumInput>;
@@ -64,24 +65,31 @@ export const LoanSchema = z.object({
 });
 export type Loan = z.infer<typeof LoanSchema>;
 
-export const CreateLoanInput = z
-  .object({
-    name: z.string().min(1).max(80),
-    principalMinor: MinorAmountString.refine((s) => Number(s) > 0, {
-      message: 'principalMinor must be > 0',
-    }),
-    currencyCode: CurrencyCode,
-    aprBps: z.number().int().min(0).max(20000),
-    termMonths: z.number().int().min(1).max(600),
-    startDate: DateOnly,
-    paidMonths: z.number().int().min(0).optional().default(0),
-    extraMonthlyMinor: MinorAmountString.optional(),
-    note: z.string().max(500).nullable().optional(),
-    colorToken: z.string().nullable().optional(),
-    iconToken: z.string().nullable().optional(),
-    displayOrder: z.number().int().nonnegative().optional(),
-    lumpSums: z.array(LoanLumpSumInput).optional(),
-  })
+// Un-refined field shape. The API DTO consumes this directly: the loans
+// service re-validates `paidMonths`/`termMonths`/lump-sum months itself so it
+// can throw the stable LOAN_PAID_MONTHS_EXCEEDS_TERM / LOAN_APR_OUT_OF_RANGE
+// (etc.) codes instead of a generic VALIDATION_ERROR. `name` is trimmed and
+// the lump-sum array is bounded — both were API-DTO-only.
+export const CreateLoanInputBase = z.object({
+  name: z.string().trim().min(1).max(80),
+  principalMinor: MinorAmountString.refine((s) => Number(s) > 0, {
+    message: 'principalMinor must be > 0',
+  }),
+  currencyCode: CurrencyCode,
+  aprBps: z.number().int().min(0).max(20000),
+  termMonths: z.number().int().min(1).max(600),
+  startDate: DateOnly,
+  paidMonths: z.number().int().min(0).max(600).optional().default(0),
+  extraMonthlyMinor: MinorAmountString.optional(),
+  note: z.string().max(500).nullable().optional(),
+  colorToken: z.string().max(40).nullable().optional(),
+  iconToken: z.string().max(40).nullable().optional(),
+  displayOrder: z.number().int().nonnegative().optional(),
+  lumpSums: z.array(LoanLumpSumInput).max(500).optional(),
+});
+
+// Web/mobile forms use this refined variant for early validation feedback.
+export const CreateLoanInput = CreateLoanInputBase
   .superRefine((v, ctx) => {
     if (v.paidMonths !== undefined && v.paidMonths > v.termMonths) {
       ctx.addIssue({
@@ -112,19 +120,19 @@ export type CreateLoanInputType = z.infer<typeof CreateLoanInput>;
 // `currencyCode` deliberately OMITTED — the server rejects PATCH carrying it
 // with LOAN_CURRENCY_IMMUTABLE 422. `status` is derived server-side.
 export const UpdateLoanInput = z.object({
-  name: z.string().min(1).max(80).optional(),
+  name: z.string().trim().min(1).max(80).optional(),
   principalMinor: MinorAmountString.optional(),
   aprBps: z.number().int().min(0).max(20000).optional(),
   termMonths: z.number().int().min(1).max(600).optional(),
   startDate: DateOnly.optional(),
-  paidMonths: z.number().int().min(0).optional(),
+  paidMonths: z.number().int().min(0).max(600).optional(),
   extraMonthlyMinor: MinorAmountString.optional(),
   note: z.string().max(500).nullable().optional(),
-  colorToken: z.string().nullable().optional(),
-  iconToken: z.string().nullable().optional(),
+  colorToken: z.string().max(40).nullable().optional(),
+  iconToken: z.string().max(40).nullable().optional(),
   displayOrder: z.number().int().nonnegative().optional(),
   // When present, REPLACES the full lump-sum set atomically.
-  lumpSums: z.array(LoanLumpSumInput).optional(),
+  lumpSums: z.array(LoanLumpSumInput).max(500).optional(),
 });
 export type UpdateLoanInputType = z.infer<typeof UpdateLoanInput>;
 
@@ -134,7 +142,8 @@ export const ReorderLoansEntry = z.object({
 });
 
 export const ReorderLoansInput = z.object({
-  order: z.array(ReorderLoansEntry),
+  // 1..500 bound — was API-DTO-only; folded into core for parity.
+  order: z.array(ReorderLoansEntry).min(1).max(500),
 });
 export type ReorderLoansInputType = z.infer<typeof ReorderLoansInput>;
 
@@ -206,6 +215,16 @@ export type LoanSavingsWire = z.infer<typeof LoanSavingsSchema>;
 
 export const ComparisonBaselineEnum = z.enum(['saved', 'contractual']);
 export type ComparisonBaseline = z.infer<typeof ComparisonBaselineEnum>;
+
+// Un-refined field shape consumed by the API DTO. The `.superRefine` on
+// `ComputeLoanInput` only re-asserts `appliedAtMonth >= 1`, which the inner
+// `LoanLumpSumInput.appliedAtMonth.min(1)` already enforces — so the base and
+// refined variants validate identically; the split keeps one field source.
+export const ComputeLoanInputBase = z.object({
+  extraMonthlyMinor: MinorAmountString.optional(),
+  lumpSums: z.array(LoanLumpSumInput).max(500).optional(),
+  comparisonBaseline: ComparisonBaselineEnum.optional(),
+});
 
 export const ComputeLoanInput = z
   .object({

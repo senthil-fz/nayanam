@@ -12,6 +12,7 @@ import {
   type HomeState,
 } from '@nayanam/core';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
+import { getRouter } from './router';
 
 const BASE_URL: string =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
@@ -44,7 +45,15 @@ export const apiClient: ApiClient = createApiClient({
     onUnauthenticated: () => {
       useAuthStore.getState().clear();
       if (typeof window !== 'undefined' && !location.pathname.startsWith('/auth')) {
-        location.href = '/auth';
+        const router = getRouter();
+        if (router) {
+          // Use the router singleton so navigation stays in-app (no hard reload,
+          // no loss of in-memory access token or query cache warm-up work).
+          void router.navigate({ to: '/auth', replace: true });
+        } else {
+          // Fallback: router not yet initialised (bootstrap edge case).
+          location.href = '/auth';
+        }
       }
     },
   },

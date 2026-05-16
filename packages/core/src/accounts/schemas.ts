@@ -47,8 +47,10 @@ export const CreateAccountInput = z.object({
     .regex(/^[0-9]{4}$/)
     .nullable()
     .optional(),
-  colorToken: z.string().optional(),
-  iconToken: z.string().optional(),
+  // Token caps (1..40) were previously API-DTO-only; folded into core so the
+  // web/mobile forms reject the same out-of-range token strings.
+  colorToken: z.string().min(1).max(40).optional(),
+  iconToken: z.string().min(1).max(40).optional(),
   openingBalanceMinor: MinorAmountString.optional(),
   openingBalanceAt: z.string().datetime().optional(),
 });
@@ -62,8 +64,8 @@ export const UpdateAccountInput = z
       .string()
       .regex(/^[0-9]{4}$/)
       .nullable(),
-    colorToken: z.string(),
-    iconToken: z.string(),
+    colorToken: z.string().min(1).max(40),
+    iconToken: z.string().min(1).max(40),
     openingBalanceMinor: MinorAmountString,
     openingBalanceAt: z.string().datetime(),
   })
@@ -124,6 +126,7 @@ export const ReorderAccountsEntry = z.object({
 });
 
 export const ReorderAccountsInput = z.object({
-  order: z.array(ReorderAccountsEntry),
+  // 1..200 bound — was API-DTO-only; folded into core for parity.
+  order: z.array(ReorderAccountsEntry).min(1).max(200),
 });
 export type ReorderAccountsInputType = z.infer<typeof ReorderAccountsInput>;

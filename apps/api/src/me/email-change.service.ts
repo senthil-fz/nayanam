@@ -12,6 +12,7 @@ import { recordUserEvent } from './me.service';
 const OTP_TTL_SECONDS = 600;
 const COOLDOWN_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
+const HOURLY_SEND_BUDGET = 5;
 
 @Injectable()
 export class EmailChangeService {
@@ -32,6 +33,21 @@ export class EmailChangeService {
       select: { id: true },
     });
     if (inUse) throw Errors.emailAlreadyInUse();
+
+    // Hourly send budget: count Event rows (not emailChangeRequest rows — sends
+    // reuse the same pending row via UPDATE, so counting requests would never
+    // reflect true send frequency).
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentSends = await this.prisma.event.count({
+      where: {
+        actorId: userId,
+        type: EventType.USER_EMAIL_CHANGE_REQUESTED,
+        createdAt: { gte: hourAgo },
+      },
+    });
+    if (recentSends >= HOURLY_SEND_BUDGET) {
+      throw Errors.emailChangeCooldown(3600);
+    }
 
     const pending = await this.prisma.emailChangeRequest.findFirst({
       where: { userId, consumedAt: null },

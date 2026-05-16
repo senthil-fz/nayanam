@@ -15,12 +15,13 @@ async function bootstrap() {
   const port = config.get<number>('API_PORT', 3000);
   const corsOrigins = config.get<string[]>('API_CORS_ORIGINS', ['http://localhost:5173']);
   const nodeEnv = config.get<string>('NODE_ENV', 'development');
+  const trustProxyHops = config.get<number>('TRUST_PROXY_HOPS', 1);
 
   // Enable trust-proxy so Express reads X-Forwarded-For correctly behind
   // a reverse proxy (nginx, ALB, etc.). Must be called on the underlying
   // Express instance since NestJS does not expose `set` on INestApplication.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  (app.getHttpAdapter().getInstance() as import('express').Application).set('trust proxy', 1);
+  // TRUST_PROXY_HOPS is env-driven (default 1); set to 0 to disable.
+  (app.getHttpAdapter().getInstance() as import('express').Application).set('trust proxy', trustProxyHops);
 
   app.use(
     helmet({

@@ -32,8 +32,9 @@ export type Category = z.infer<typeof CategorySchema>;
 export const CreateCategoryInput = z.object({
   label: z.string().min(1).max(40),
   type: CreateCategoryTypeEnum,
-  iconToken: z.string().optional(),
-  colorToken: z.string().optional(),
+  // Token caps (1..40) were previously API-DTO-only; folded into core.
+  iconToken: z.string().min(1).max(40).optional(),
+  colorToken: z.string().min(1).max(40).optional(),
   displayOrder: z.number().int().nonnegative().optional(),
 });
 export type CreateCategoryInputType = z.infer<typeof CreateCategoryInput>;
@@ -41,8 +42,8 @@ export type CreateCategoryInputType = z.infer<typeof CreateCategoryInput>;
 export const UpdateCategoryInput = z
   .object({
     label: z.string().min(1).max(40),
-    iconToken: z.string(),
-    colorToken: z.string(),
+    iconToken: z.string().min(1).max(40),
+    colorToken: z.string().min(1).max(40),
     displayOrder: z.number().int().nonnegative(),
   })
   .partial();
@@ -54,6 +55,7 @@ export const ReorderCategoriesEntry = z.object({
 });
 
 export const ReorderCategoriesInput = z.object({
-  order: z.array(ReorderCategoriesEntry),
+  // 1..500 bound — was API-DTO-only; folded into core for parity.
+  order: z.array(ReorderCategoriesEntry).min(1).max(500),
 });
 export type ReorderCategoriesInputType = z.infer<typeof ReorderCategoriesInput>;

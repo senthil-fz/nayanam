@@ -91,6 +91,12 @@ export const envSchema = z.object({
   // ---- push ----
   EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
 
+  // ---- proxy ----
+  // Number of trusted reverse-proxy hops in front of the API (nginx, ALB, etc.).
+  // Passed to Express `set('trust proxy', N)` so X-Forwarded-For is read correctly.
+  // Set to 0 to disable trust proxy entirely in environments with no proxy.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+
   // ---- app metadata ----
   // Set by CI/CD (e.g. from package.json version or git tag). Defaults to '0.0.0'
   // in local dev. Exposed via GET /api/v1/meta/links as `appVersion`.

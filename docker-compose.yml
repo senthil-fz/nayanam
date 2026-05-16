@@ -1,3 +1,7 @@
+# LOCAL DEVELOPMENT ONLY — do NOT expose these ports on a shared or production host.
+# Passwords are sourced from environment variables with local-dev fallbacks.
+# Copy .env.example to .env and override any values before starting.
+
 services:
   postgres:
     image: postgres:17
@@ -5,10 +9,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: nayanam
-      POSTGRES_PASSWORD: nayanam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nayanam}
       POSTGRES_DB: nayanam
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - nayanam-pg-data:/var/lib/postgresql/data
 
@@ -19,10 +23,10 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: nayanam
-      MINIO_ROOT_PASSWORD: nayanam-secret
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nayanam-secret}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - nayanam-minio-data:/data
 
@@ -31,8 +35,8 @@ services:
     container_name: nayanam-mailhog
     restart: unless-stopped
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   liquibase:
     image: liquibase/liquibase:4.29
@@ -45,7 +49,7 @@ services:
       - --defaults-file=/liquibase/changelog/liquibase.properties
       - --url=jdbc:postgresql://postgres:5432/nayanam
       - --username=nayanam
-      - --password=nayanam
+      - --password=${POSTGRES_PASSWORD:-nayanam}
       - --changelog-file=changelog-master.yaml
       - update
 

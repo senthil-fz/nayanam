@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
+import { MandatoryIdempotencyInterceptor } from '../common/mandatory-idempotency.interceptor';
 import { TransactionsService } from './transactions.service';
 import {
   BulkCreateTransactionsDto,
@@ -36,7 +37,7 @@ export class TransactionsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(IdempotencyInterceptor)
+  @UseInterceptors(MandatoryIdempotencyInterceptor)
   create(@Body() body: CreateTransactionDto) {
     return this.svc.create(body);
   }

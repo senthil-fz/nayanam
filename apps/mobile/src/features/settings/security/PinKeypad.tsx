@@ -105,9 +105,16 @@ export function PinKeypad({
       >
         {KEYS.map((k, i) => {
           const disabled = k === '' || (k === 'backspace' && value.length === 0);
+          const testID =
+            k === 'backspace'
+              ? 'pin-keypad-backspace'
+              : k === ''
+                ? undefined
+                : `pin-keypad-digit-${k}`;
           return (
             <Pressable
               key={`${k}-${String(i)}`}
+              testID={testID}
               accessibilityRole="button"
               accessibilityLabel={
                 k === 'backspace' ? 'Delete' : k === '' ? 'Empty' : `Digit ${k}`

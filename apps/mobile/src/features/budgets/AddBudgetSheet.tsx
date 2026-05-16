@@ -31,6 +31,7 @@ import type {
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useCreateBudget } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import {
   BudgetFormFields,
   type BudgetFormValues,
@@ -140,7 +141,7 @@ export const AddBudgetSheet = forwardRef<AddBudgetSheetHandle, Props>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Create budget failed', err);
+        logWarn('Create budget failed', err);
       }
     });
 
@@ -188,6 +189,7 @@ export const AddBudgetSheet = forwardRef<AddBudgetSheetHandle, Props>(
             />
 
             <Pressable
+              testID="add-budget-submit"
               accessibilityRole="button"
               accessibilityLabel="Save budget"
               disabled={createMut.isPending}

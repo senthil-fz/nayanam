@@ -39,6 +39,7 @@ import {
 } from '@nayanam/ui-tokens';
 import { useUpdateCategory } from '../../lib/hooks';
 import { hapticError, hapticSelection, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { CategoryChip } from './CategoryChip';
 
 export type EditCategorySheetHandle = {
@@ -110,7 +111,7 @@ export const EditCategorySheet = forwardRef<EditCategorySheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Update category failed', err);
+        logWarn('Update category failed', err);
       }
     });
 
@@ -270,6 +271,7 @@ export const EditCategorySheet = forwardRef<EditCategorySheetHandle>(
             </Field>
 
             <Pressable
+              testID="edit-category-submit"
               accessibilityRole="button"
               accessibilityLabel="Save changes"
               disabled={updateMut.isPending}

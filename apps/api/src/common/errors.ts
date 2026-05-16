@@ -45,6 +45,12 @@ export const Errors = {
         hint: 'Request body differs from the original request stored under this idempotency key.',
       },
     ),
+  idempotencyKeyMissing: () =>
+    new AppError(
+      'IDEMPOTENCY_KEY_MISSING',
+      'Idempotency-Key header is required for this endpoint.',
+      HttpStatus.BAD_REQUEST,
+    ),
   idempotencyKeyInvalid: (details?: Record<string, unknown>) =>
     new AppError(
       'IDEMPOTENCY_KEY_INVALID',
@@ -317,6 +323,13 @@ export const Errors = {
     new AppError(
       'ATTACHMENT_SIZE_MISMATCH',
       'Uploaded object size does not match the declared size.',
+      HttpStatus.CONFLICT,
+      details,
+    ),
+  attachmentMimeMismatch: (details?: Record<string, unknown>) =>
+    new AppError(
+      'ATTACHMENT_MIME_MISMATCH',
+      'Uploaded object MIME type does not match the declared MIME type.',
       HttpStatus.CONFLICT,
       details,
     ),

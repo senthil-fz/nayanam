@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ApiRequestError } from '@nayanam/core';
 import { useRequestOtp, useVerifyOtp } from '../lib/hooks';
@@ -33,6 +33,7 @@ function AuthScreen() {
   const [code, setCode] = useState('');
   const requestOtp = useRequestOtp();
   const verifyOtp = useVerifyOtp();
+  const navigate = useNavigate();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-6">
@@ -95,7 +96,7 @@ function AuthScreen() {
               { email, code },
               {
                 onSuccess: () => {
-                  window.location.href = '/';
+                  void navigate({ to: '/', replace: true });
                 },
               },
             );

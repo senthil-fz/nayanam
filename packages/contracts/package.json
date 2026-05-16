@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "prepare": "pnpm generate",
     "generate": "openapi-typescript openapi.yaml -o src/generated.ts",
     "lint:spec": "redocly lint openapi.yaml",
     "typecheck": "tsc --noEmit",

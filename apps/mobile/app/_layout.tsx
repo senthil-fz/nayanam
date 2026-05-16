@@ -1,5 +1,6 @@
 import '../global.css';
 import { Redirect, Stack, useSegments } from 'expo-router';
+import type { ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -7,7 +8,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { focusManager } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Pressable, Text, View } from 'react-native';
 import { useAuthStore } from '../src/lib/api';
 import { persistOptions, queryClient } from '../src/lib/query-client';
 import {
@@ -90,4 +91,49 @@ export default function RootLayout() {
 function AppearanceEffect({ children }: { children: ReactNode }) {
   useApplyAppearanceEffect();
   return <>{children}</>;
+}
+
+// Named export per Expo Router convention — the framework picks it up
+// automatically and wraps the root route segment with this error boundary.
+// The `retry` callback re-renders the route by clearing the error state.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+        gap: 16,
+      }}
+    >
+      <Text
+        style={{ fontSize: 18, fontWeight: '700', color: '#0e0e10', textAlign: 'center' }}
+      >
+        Something went wrong
+      </Text>
+      <Text
+        style={{ fontSize: 13, color: '#6e6e80', textAlign: 'center', lineHeight: 20 }}
+      >
+        {error.message || 'An unexpected error occurred.'}
+      </Text>
+      <Pressable
+        testID="error-boundary-retry"
+        accessibilityRole="button"
+        accessibilityLabel="Try again"
+        onPress={() => void retry()}
+        style={{
+          backgroundColor: '#4f46e5',
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          borderRadius: 12,
+          minHeight: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Try again</Text>
+      </Pressable>
+    </View>
+  );
 }

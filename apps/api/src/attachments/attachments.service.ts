@@ -145,6 +145,17 @@ export class AttachmentsService {
       });
       throw Errors.attachmentSizeMismatch({ declared: row.size.toString(), observed: head.size });
     }
+    // MIME guard: the Content-Type stored in S3 must match what was declared at
+    // presign time. A mismatch indicates the client uploaded a different file
+    // type (e.g. text/html masquerading as application/pdf), which is a
+    // stored-XSS vector. Reject and mark FAILED so the client must re-presign.
+    if (head.mime !== null && head.mime !== row.mime) {
+      await this.prisma.attachment.update({
+        where: { id: row.id },
+        data: { status: 'FAILED', updatedAt: new Date() },
+      });
+      throw Errors.attachmentMimeMismatch({ declared: row.mime, observed: head.mime });
+    }
 
     // Generate thumbnail + metadata inline for images. PDFs are passed through.
     let thumbKey: string | null = null;
@@ -274,7 +285,7 @@ export class AttachmentsService {
       where: { id, householdId, deletedAt: null },
     });
     if (!row) throw Errors.notFound();
-    const url = await this.storage.presignGet(row.key, PRESIGN_GET_TTL_SEC);
+    const url = await this.storage.presignGet(row.key, row.mime, PRESIGN_GET_TTL_SEC);
     return {
       url,
       expiresAt: new Date(Date.now() + PRESIGN_GET_TTL_SEC * 1000).toISOString(),
@@ -409,9 +420,10 @@ export class AttachmentsService {
 
     if (row.status === 'READY') {
       try {
-        downloadUrl = await this.storage.presignGet(row.key, PRESIGN_GET_TTL_SEC);
+        downloadUrl = await this.storage.presignGet(row.key, row.mime, PRESIGN_GET_TTL_SEC);
         if (row.thumbKey) {
-          thumbUrl = await this.storage.presignGet(row.thumbKey, PRESIGN_GET_TTL_SEC);
+          // Thumbnails are always stored as WebP regardless of the source MIME.
+          thumbUrl = await this.storage.presignGet(row.thumbKey, 'image/webp', PRESIGN_GET_TTL_SEC);
         } else {
           thumbUrl = null;
         }

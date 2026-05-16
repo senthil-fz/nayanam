@@ -46,6 +46,7 @@ import {
   useUpdateTransaction,
 } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { MinorAmountInput } from './MinorAmountInput';
 import {
   AccountPickerSheet,
@@ -193,7 +194,7 @@ export const EditTransactionSheet = forwardRef<EditTransactionSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Update transaction failed', err);
+        logWarn('Update transaction failed', err);
       }
     });
 
@@ -205,7 +206,7 @@ export const EditTransactionSheet = forwardRef<EditTransactionSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Restore failed', err);
+        logWarn('Restore failed', err);
       }
     };
 
@@ -369,6 +370,7 @@ export const EditTransactionSheet = forwardRef<EditTransactionSheetHandle>(
                 </Pressable>
               ) : (
                 <Pressable
+                  testID="edit-transaction-submit"
                   accessibilityRole="button"
                   accessibilityLabel="Save changes"
                   disabled={updateMut.isPending || isTransfer}

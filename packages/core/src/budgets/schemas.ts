@@ -38,25 +38,29 @@ export const BudgetSchema = z.object({
 });
 export type Budget = z.infer<typeof BudgetSchema>;
 
-// Create: scope/category coupling enforced via `.superRefine` so clients get
-// an early validation error before the server returns BUDGET_CATEGORY_REQUIRED
-// / BUDGET_CATEGORY_FORBIDDEN.
-export const CreateBudgetInput = z
-  .object({
-    name: z.string().min(1).max(60),
-    scope: BudgetScopeEnum,
-    categoryId: z.string().min(1).nullable().optional(),
-    amountMinor: MinorAmountString.refine((s) => Number(s) > 0, {
-      message: 'amountMinor must be > 0',
-    }),
-    currencyCode: CurrencyCode,
-    period: BudgetPeriodEnum,
-    rollover: z.boolean().optional().default(false),
-    startAt: z.string().datetime().optional(),
-    endAt: z.string().datetime().nullable().optional(),
-    displayOrder: z.number().int().nonnegative().optional(),
-  })
-  .superRefine((v, ctx) => {
+// Un-refined field shape. The API DTO consumes this directly: the budgets
+// service deliberately re-checks the scope/category coupling so it can throw
+// the stable BUDGET_CATEGORY_REQUIRED / BUDGET_CATEGORY_FORBIDDEN codes rather
+// than a generic VALIDATION_ERROR. `name` is trimmed (was API-DTO-only).
+export const CreateBudgetInputBase = z.object({
+  name: z.string().trim().min(1).max(60),
+  scope: BudgetScopeEnum,
+  categoryId: z.string().min(1).nullable().optional(),
+  amountMinor: MinorAmountString.refine((s) => Number(s) > 0, {
+    message: 'amountMinor must be > 0',
+  }),
+  currencyCode: CurrencyCode,
+  period: BudgetPeriodEnum,
+  rollover: z.boolean().optional().default(false),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().nullable().optional(),
+  displayOrder: z.number().int().nonnegative().optional(),
+});
+
+// Create: scope/category coupling enforced via `.superRefine` so web/mobile
+// forms get an early validation error before the server returns
+// BUDGET_CATEGORY_REQUIRED / BUDGET_CATEGORY_FORBIDDEN.
+export const CreateBudgetInput = CreateBudgetInputBase.superRefine((v, ctx) => {
     if (v.scope === 'CATEGORY' && !v.categoryId) {
       ctx.addIssue({
         code: 'custom',
@@ -86,7 +90,7 @@ export type CreateBudgetInputType = z.infer<typeof CreateBudgetInput>;
 // Partial update — only mutable fields. `scope`, `categoryId`, `currencyCode`,
 // `period`, and `startAt` are immutable per the contract.
 export const UpdateBudgetInput = z.object({
-  name: z.string().min(1).max(60).optional(),
+  name: z.string().trim().min(1).max(60).optional(),
   amountMinor: MinorAmountString.optional(),
   rollover: z.boolean().optional(),
   endAt: z.string().datetime().nullable().optional(),
@@ -100,7 +104,8 @@ export const ReorderBudgetsEntry = z.object({
 });
 
 export const ReorderBudgetsInput = z.object({
-  order: z.array(ReorderBudgetsEntry),
+  // 1..500 bound — was API-DTO-only; folded into core for parity.
+  order: z.array(ReorderBudgetsEntry).min(1).max(500),
 });
 export type ReorderBudgetsInputType = z.infer<typeof ReorderBudgetsInput>;
 

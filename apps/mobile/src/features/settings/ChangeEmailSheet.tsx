@@ -165,6 +165,7 @@ export const ChangeEmailSheet = forwardRef<ChangeEmailSheetHandle, object>(
                 onPress={() => inner.current?.dismiss()}
               />
               <PrimaryButton
+                testID="change-email-send-code"
                 label="Send code"
                 onPress={() => void onRequest()}
                 loading={requestMut.isPending}
@@ -244,6 +245,7 @@ export const ChangeEmailSheet = forwardRef<ChangeEmailSheetHandle, object>(
                   onPress={() => setStage('request')}
                 />
                 <PrimaryButton
+                  testID="change-email-verify"
                   label="Verify"
                   onPress={() => void onVerify()}
                   loading={verifyMut.isPending}

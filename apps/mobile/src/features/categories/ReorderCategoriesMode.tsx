@@ -11,6 +11,7 @@ import type { Category, ReorderCategoriesInputType } from '@nayanam/core';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useReorderCategories } from '../../lib/hooks';
 import { hapticError, hapticSelection, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { CategoryChip } from './CategoryChip';
 
 export function ReorderCategoriesMode({
@@ -36,7 +37,7 @@ export function ReorderCategoriesMode({
       onDone();
     } catch (err) {
       hapticError();
-      console.warn('Reorder failed', err);
+      logWarn('Reorder failed', err);
     }
   };
 

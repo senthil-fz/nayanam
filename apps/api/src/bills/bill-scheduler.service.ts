@@ -269,12 +269,14 @@ export class BillSchedulerService {
     type: typeof EventType.BILL_DUE_SOON | typeof EventType.BILL_OVERDUE,
   ): Promise<void> {
     // Write one notifications row per household member + set the dedupe cursor.
-    const members = await this.prisma.householdMember.findMany({
-      where: { householdId: r.household_id },
-      select: { userId: true },
-    });
-
+    // The householdMember read is inside the transaction so a member added
+    // mid-run is not missed (API-4 fix).
     const notificationRows = await this.prisma.$transaction(async (tx) => {
+      const members = await tx.householdMember.findMany({
+        where: { householdId: r.household_id },
+        select: { userId: true },
+      });
+
       const created: Array<{ id: string; userId: string }> = [];
       for (const m of members) {
         const notifId = newId();
@@ -341,11 +343,13 @@ export class BillSchedulerService {
     type: EventType,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    const members = await this.prisma.householdMember.findMany({
-      where: { householdId },
-      select: { userId: true },
-    });
+    // householdMember read is inside the transaction so a member added
+    // mid-run is not missed (API-4 fix).
     await this.prisma.$transaction(async (tx) => {
+      const members = await tx.householdMember.findMany({
+        where: { householdId },
+        select: { userId: true },
+      });
       for (const m of members) {
         await tx.notification.create({
           data: {

@@ -32,6 +32,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <HomeIcon color={color} size={22} />,
+          tabBarButtonTestID: 'tabs-home',
         }}
       />
       <Tabs.Screen
@@ -39,6 +40,7 @@ export default function TabsLayout() {
         options={{
           title: 'Transactions',
           tabBarIcon: ({ color }) => <StatsIcon color={color} size={22} />,
+          tabBarButtonTestID: 'tabs-transactions',
         }}
       />
       <Tabs.Screen
@@ -46,6 +48,7 @@ export default function TabsLayout() {
         options={{
           title: 'Stats',
           tabBarIcon: ({ color }) => <StatsIcon color={color} size={22} />,
+          tabBarButtonTestID: 'tabs-stats',
         }}
       />
       <Tabs.Screen
@@ -53,6 +56,7 @@ export default function TabsLayout() {
         options={{
           title: 'Bills',
           tabBarIcon: ({ color }) => <ReceiptText color={color} size={22} />,
+          tabBarButtonTestID: 'tabs-bills',
         }}
       />
       <Tabs.Screen
@@ -60,6 +64,7 @@ export default function TabsLayout() {
         options={{
           title: 'Cards',
           tabBarIcon: ({ color }) => <CardIcon color={color} size={22} />,
+          tabBarButtonTestID: 'tabs-cards',
         }}
       />
     </Tabs>

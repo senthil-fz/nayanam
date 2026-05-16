@@ -113,12 +113,7 @@ export function AddTransactionDialog({
   const selectedAccount = activeAccounts.find((a) => a.id === accountId);
 
   const matchingCategories = useMemo(
-    () =>
-      categories.filter(
-        (c) => c.type === type && !c.archivedAt && c.householdId !== null
-          ? true
-          : c.type === type && !c.archivedAt,
-      ),
+    () => categories.filter((c) => c.type === type && !c.archivedAt),
     [categories, type],
   );
 

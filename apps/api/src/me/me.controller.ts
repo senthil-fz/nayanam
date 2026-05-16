@@ -94,6 +94,7 @@ export class MeController {
   // ---- email change ----
 
   @Post('change-email/request')
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   async requestEmailChange(@CurrentUser() ctx: AuthContext, @Body() body: RequestEmailChangeDto) {

@@ -103,13 +103,29 @@ export class StorageService implements OnModuleInit {
     }
   }
 
-  async presignGet(key: string, expiresInSec = 300): Promise<string> {
+  /**
+   * Generate a presigned GET URL for the given key.
+   *
+   * When `mime` is supplied the URL includes `ResponseContentType` and
+   * `ResponseContentDisposition=attachment` query parameters. S3-compatible
+   * storage (and real S3) will honour these and set the corresponding
+   * response headers, preventing browsers from rendering HTML/SVG inline —
+   * closing the stored-XSS vector where a file uploaded as application/pdf
+   * is actually text/html.
+   */
+  async presignGet(key: string, mime: string | null | undefined, expiresInSec = 300): Promise<string> {
     try {
-      return await getSignedUrl(
-        this.client,
-        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-        { expiresIn: expiresInSec },
-      );
+      const cmd = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ...(mime
+          ? {
+              ResponseContentType: mime,
+              ResponseContentDisposition: 'attachment',
+            }
+          : {}),
+      });
+      return await getSignedUrl(this.client, cmd, { expiresIn: expiresInSec });
     } catch (err) {
       this.logger.error(
         { op: 'presignGet', cause: err instanceof Error ? err.message : String(err) },

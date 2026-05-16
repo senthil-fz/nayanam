@@ -150,6 +150,7 @@ export const EditProfileSheet = forwardRef<EditProfileSheetHandle, object>(
                 onPress={() => inner.current?.dismiss()}
               />
               <PrimaryButton
+                testID="edit-profile-submit"
                 label="Save"
                 onPress={() => void onSave()}
                 loading={update.isPending}

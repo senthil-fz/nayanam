@@ -7,11 +7,12 @@ import { CategoriesModule } from '../categories/categories.module';
 import { BudgetsModule } from '../budgets/budgets.module';
 import { HouseholdHeaderGuard } from '../common/household-header.guard';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
+import { MandatoryIdempotencyInterceptor } from '../common/mandatory-idempotency.interceptor';
 
 @Module({
   imports: [AuthModule, AccountsModule, CategoriesModule, BudgetsModule],
   controllers: [TransactionsController],
-  providers: [TransactionsService, HouseholdHeaderGuard, IdempotencyInterceptor],
+  providers: [TransactionsService, HouseholdHeaderGuard, IdempotencyInterceptor, MandatoryIdempotencyInterceptor],
   exports: [TransactionsService],
 })
 export class TransactionsModule {}

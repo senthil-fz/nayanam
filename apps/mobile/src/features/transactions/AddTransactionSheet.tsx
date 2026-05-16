@@ -42,6 +42,7 @@ import {
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useAccounts, useCreateTransaction } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { MinorAmountInput } from './MinorAmountInput';
 import {
   AccountPickerSheet,
@@ -199,7 +200,7 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
       } catch (err) {
         hapticError();
         setUploadStatus(null);
-        console.warn('Create transaction failed', err);
+        logWarn('Create transaction failed', err);
       }
     });
 
@@ -388,6 +389,7 @@ export const AddTransactionSheet = forwardRef<AddTransactionSheetHandle>(
               ) : null}
 
               <Pressable
+                testID="add-transaction-submit"
                 accessibilityRole="button"
                 accessibilityLabel="Create transaction"
                 disabled={createMut.isPending || !account || !category}

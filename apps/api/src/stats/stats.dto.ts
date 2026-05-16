@@ -1,14 +1,22 @@
 import { z } from 'zod';
+import { StatsPeriodKindEnum as CoreStatsPeriodKindEnum } from '@nayanam/core/stats/schemas';
 
 /**
- * Query schemas for the six Stats endpoints. Mirror the contract at
- * `packages/contracts/openapi.yaml`. Service-layer invariants (span ≤ 2y,
- * currency allowlist, categoryIds cross-tenant check) run in `stats.service`
- * so they can throw stable domain error codes instead of generic
- * VALIDATION_ERROR from Zod.
+ * Query schemas for the six Stats endpoints. Stats is read-only: there are no
+ * request *bodies* to share — every schema below is an Express query-string
+ * coercion variant (`z.coerce`, `.passthrough()`, repeated-param normalization)
+ * with no `@nayanam/core` counterpart by design. The only shared runtime value
+ * is the period-kind enum, re-exported from core (B4). The response `*DTO`
+ * types stay local: they are service-internal and intentionally narrower than
+ * the core wire schemas (e.g. `CategoryBreakdownResponseDTO.type` is
+ * INCOME|EXPENSE, the core schema also admits TRANSFER).
+ *
+ * Service-layer invariants (span ≤ 2y, currency allowlist, categoryIds
+ * cross-tenant check) run in `stats.service` so they throw stable domain
+ * error codes instead of a generic VALIDATION_ERROR from Zod.
  */
 
-export const StatsPeriodKindEnum = z.enum(['week', 'month', 'year', 'custom']);
+export const StatsPeriodKindEnum = CoreStatsPeriodKindEnum;
 export type StatsPeriodKind = z.infer<typeof StatsPeriodKindEnum>;
 
 const CurrencyCodeSchema = z

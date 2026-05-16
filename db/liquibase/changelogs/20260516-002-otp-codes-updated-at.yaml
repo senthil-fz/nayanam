@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260516-002-otp-codes-updated-at
+      author: nayanam
+      comment: |
+        Add updated_at column to otp_codes.
+        The table mutates attempts and consumed_at but had no updated_at timestamp,
+        making it impossible to track when a row was last changed. Adding as
+        TIMESTAMPTZ NOT NULL DEFAULT now() — safe in a single changeset because
+        Nayanam is pre-production and the table is small.
+      changes:
+        - addColumn:
+            tableName: otp_codes
+            columns:
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: otp_codes
+            columnName: updated_at

@@ -9,6 +9,7 @@
 import { Alert } from 'react-native';
 import { apiClient } from '../../lib/api';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { ulid } from 'ulid';
 
 export type TxForDelete = {
@@ -61,7 +62,7 @@ export function confirmDeleteTransaction(
                 } catch (err) {
                   hapticError();
                   Alert.alert('Undo failed', 'Please try restoring from Edit.');
-                  console.warn('Undo failed', err);
+                  logWarn('Undo failed', err);
                 }
                 })();
               },

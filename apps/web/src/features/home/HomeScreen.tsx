@@ -15,6 +15,7 @@ import { BudgetsWidget } from './BudgetsWidget';
 import { RecentActivity } from './RecentActivity';
 
 export function HomeScreen() {
+  // All hooks must be called unconditionally before any early return.
   const me = useMe();
   const { data: householdsData } = useHouseholds();
   const activeId = useAuthStore((s) => s.activeHouseholdId);
@@ -30,6 +31,38 @@ export function HomeScreen() {
     [categoriesQuery.data],
   );
 
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPrefillType, setAddPrefillType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
+
+  // Show an error state when the core data queries fail. A failed fetch must
+  // not render as an "empty household" — that masks the error silently.
+  const isError = accountsQuery.isError || categoriesQuery.isError;
+  if (isError) {
+    const retry = () => {
+      if (accountsQuery.isError) void accountsQuery.refetch();
+      if (categoriesQuery.isError) void categoriesQuery.refetch();
+    };
+    return (
+      <div
+        role="alert"
+        className="flex flex-col items-center justify-center gap-4 py-20 text-center"
+      >
+        <p className="text-sm text-[var(--color-text-dim)]">
+          Failed to load your household data. Check your connection and try again.
+        </p>
+        <button
+          type="button"
+          onClick={retry}
+          className="rounded-full bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   const households = householdsData ?? me.data?.households ?? [];
   const activeHousehold =
     households.find((h) => h.id === activeId) ?? households[0];
@@ -43,11 +76,6 @@ export function HomeScreen() {
       ? 'Add an account first.'
       : undefined;
   const canOpenTransactionDialogs = canMutate && hasAccounts;
-
-  const [addOpen, setAddOpen] = useState(false);
-  const [addPrefillType, setAddPrefillType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [addAccountOpen, setAddAccountOpen] = useState(false);
 
   const openAdd = (type: 'EXPENSE' | 'INCOME') => {
     if (!canOpenTransactionDialogs) return;

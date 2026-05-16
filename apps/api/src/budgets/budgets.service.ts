@@ -43,7 +43,7 @@ const ADMIN: HouseholdRole = 'ADMIN';
 const SUGGESTION_BUMP_PCT = 110n; // × 1.10
 const SUGGESTION_ROUND_MINOR = 1000n; // next 10 major units
 
-type ThresholdPushPayload = {
+export type ThresholdPushPayload = {
   userId: string;
   title: string;
   body: string;
@@ -806,7 +806,7 @@ export class BudgetsService {
     for (const b of rows) {
       await tx.budget.update({
         where: { id: b.id },
-        data: { archivedAt: now, updatedBy: actorUserId ?? b.id },
+        data: { archivedAt: now, updatedBy: actorUserId ?? 'system' },
       });
       archivedIds.push(b.id);
       await recordEvent(tx, householdId, null, EventType.BUDGET_AUTO_ARCHIVED, {

@@ -29,6 +29,7 @@ import {
   useUpdateAccount,
 } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import {
   ColorChipRow,
   IconChipRow,
@@ -113,7 +114,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Update account failed', err);
+        logWarn('Update account failed', err);
       }
     });
 
@@ -138,7 +139,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
                 setTimeout(() => setArchivedBanner(null), 6000);
               } catch (err) {
                 hapticError();
-                console.warn('Archive failed', err);
+                logWarn('Archive failed', err);
               }
               })();
             },
@@ -155,7 +156,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
         setArchivedBanner(null);
       } catch (err) {
         hapticError();
-        console.warn('Restore failed', err);
+        logWarn('Restore failed', err);
       }
     };
 
@@ -308,6 +309,7 @@ export const EditAccountSheet = forwardRef<EditAccountSheetHandle>(
               </LabeledField>
 
               <Pressable
+                testID="edit-account-submit"
                 accessibilityRole="button"
                 accessibilityLabel="Save changes"
                 disabled={updateAccount.isPending}

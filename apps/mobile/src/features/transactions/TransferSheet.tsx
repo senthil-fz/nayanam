@@ -36,6 +36,7 @@ import {
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useCreateTransfer } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { MinorAmountInput } from './MinorAmountInput';
 import {
   AccountPickerSheet,
@@ -133,7 +134,7 @@ export const TransferSheet = forwardRef<TransferSheetHandle>(function TransferSh
       sheetRef.current?.dismiss();
     } catch (err) {
       hapticError();
-      console.warn('Create transfer failed', err);
+      logWarn('Create transfer failed', err);
     }
   });
 
@@ -258,6 +259,7 @@ export const TransferSheet = forwardRef<TransferSheetHandle>(function TransferSh
             </Field>
 
             <Pressable
+              testID="transfer-submit"
               accessibilityRole="button"
               accessibilityLabel="Create transfer"
               disabled={createMut.isPending || !source || !dest}

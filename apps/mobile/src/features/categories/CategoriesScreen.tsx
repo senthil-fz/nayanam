@@ -3,13 +3,11 @@
 // archive + reorder). Archived rows live behind a toggle at the bottom.
 
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, SectionList, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import type { Category } from '@nayanam/core';
 import { LIGHT } from '@nayanam/ui-tokens';
-import { ulid } from 'ulid';
-import { apiClient } from '../../lib/api';
 import { queryClient } from '../../lib/query-client';
 import { useArchiveCategory, useCategories } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
@@ -148,70 +146,110 @@ export function CategoriesScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New category"
-          onPress={() => addSheetRef.current?.present({ type: tab })}
-          style={{
-            marginHorizontal: 20,
-            marginTop: 16,
-            marginBottom: 8,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderStyle: 'dashed',
-            borderColor: LIGHT.border,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ fontWeight: '600', color: LIGHT.text }}>+ New category</Text>
-        </Pressable>
-
-        <SectionTitle>System</SectionTitle>
-        {systemRows.length === 0 ? (
-          <Text style={{ color: LIGHT.textDim, paddingHorizontal: 20, paddingVertical: 8 }}>
-            None.
+      {query.isError ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 }}>
+          <Text style={{ color: LIGHT.text, fontSize: 15, fontWeight: '600', textAlign: 'center' }}>
+            Failed to load categories
           </Text>
-        ) : (
-          systemRows.map((c) => <Row key={c.id} category={c} system />)
-        )}
-
-        <SectionTitle>Custom</SectionTitle>
-        {householdRows.length === 0 ? (
-          <Text style={{ color: LIGHT.textDim, paddingHorizontal: 20, paddingVertical: 8 }}>
-            No custom categories yet.
-          </Text>
-        ) : (
-          householdRows.map((c) => (
-            <Row key={c.id} category={c} onEdit={() => editSheetRef.current?.present(c)} />
-          ))
-        )}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={showArchived ? 'Hide archived' : 'Show archived'}
-          onPress={() => setShowArchived((v) => !v)}
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 14,
-            marginTop: 16,
-          }}
-        >
-          <Text
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading categories"
+            onPress={() => void query.refetch()}
             style={{
-              color: LIGHT.textDim,
-              fontFamily: 'Geist Mono',
-              letterSpacing: 0.4,
-              fontSize: 11,
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+              borderRadius: 999,
+              backgroundColor: LIGHT.chipBg,
             }}
           >
-            {showArchived ? 'HIDE ARCHIVED' : `SHOW ARCHIVED (${archived.length})`}
-          </Text>
-        </Pressable>
-        {showArchived ? <ArchivedCategoriesList items={archived} /> : null}
-      </ScrollView>
+            <Text style={{ color: LIGHT.text, fontWeight: '600' }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <SectionList
+          sections={[
+            { title: 'System', data: systemRows, key: 'system' },
+            { title: 'Custom', data: householdRows, key: 'custom' },
+          ]}
+          keyExtractor={(item) => item.id}
+          renderSectionHeader={({ section }) => (
+            <SectionTitle>{section.title}</SectionTitle>
+          )}
+          renderItem={({ item, section }) =>
+            section.key === 'system' ? (
+              <Row category={item} system />
+            ) : (
+              <Row
+                category={item}
+                onEdit={() => editSheetRef.current?.present(item)}
+              />
+            )
+          }
+          renderSectionFooter={({ section }) =>
+            section.data.length === 0 ? (
+              <Text style={{ color: LIGHT.textDim, paddingHorizontal: 20, paddingVertical: 8 }}>
+                {section.key === 'system' ? 'None.' : 'No custom categories yet.'}
+              </Text>
+            ) : null
+          }
+          ListHeaderComponent={
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New category"
+              onPress={() => addSheetRef.current?.present({ type: tab })}
+              style={{
+                marginHorizontal: 20,
+                marginTop: 16,
+                marginBottom: 8,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderStyle: 'dashed',
+                borderColor: LIGHT.border,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontWeight: '600', color: LIGHT.text }}>+ New category</Text>
+            </Pressable>
+          }
+          ListEmptyComponent={
+            query.isLoading ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator />
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={showArchived ? 'Hide archived' : 'Show archived'}
+                onPress={() => setShowArchived((v) => !v)}
+                style={{
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  marginTop: 16,
+                }}
+              >
+                <Text
+                  style={{
+                    color: LIGHT.textDim,
+                    fontFamily: 'Geist Mono',
+                    letterSpacing: 0.4,
+                    fontSize: 11,
+                  }}
+                >
+                  {showArchived ? 'HIDE ARCHIVED' : `SHOW ARCHIVED (${archived.length})`}
+                </Text>
+              </Pressable>
+              {showArchived ? <ArchivedCategoriesList items={archived} /> : null}
+            </>
+          }
+          contentContainerStyle={{ paddingBottom: 80 }}
+          removeClippedSubviews
+        />
+      )}
 
       <AddCategorySheet ref={addSheetRef} />
       <EditCategorySheet ref={editSheetRef} />
@@ -339,10 +377,3 @@ function Row({
   );
 }
 
-// Re-export the archive helper with a fresh idempotency key so callers can
-// bypass the baked-id shared hook when needed. Currently unused outside this
-// module — exposed to keep symmetry with the transactions screen pattern.
-export async function archiveCategoryDirect(id: string): Promise<void> {
-  await apiClient.archiveCategory(id, ulid());
-  void queryClient.invalidateQueries({ queryKey: ['categories'] });
-}

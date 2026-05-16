@@ -19,6 +19,7 @@ import { CreateAccountInput, type CreateAccountInputType } from '@nayanam/core';
 import { ACCENTS, DEFAULT_ACCOUNT_COLOR, DEFAULT_ACCOUNT_ICON, LIGHT } from '@nayanam/ui-tokens';
 import { useCreateAccount } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import {
   ColorChipRow,
   IconChipRow,
@@ -87,7 +88,7 @@ export const AddAccountSheet = forwardRef<AddAccountSheetHandle, Props>(
         hapticError();
         // Surface the API error code via the form via `openingBalanceMinor` field
         // for v1; a dedicated toast system lands in a later phase.
-        console.warn('Create account failed', err);
+        logWarn('Create account failed', err);
       }
     });
 
@@ -255,6 +256,7 @@ export const AddAccountSheet = forwardRef<AddAccountSheetHandle, Props>(
               </LabeledField>
 
               <Pressable
+                testID="add-account-submit"
                 accessibilityRole="button"
                 accessibilityLabel="Create account"
                 disabled={createAccount.isPending}

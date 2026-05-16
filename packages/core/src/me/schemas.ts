@@ -39,7 +39,14 @@ export type Me = z.infer<typeof MeSchema>;
 
 export const UpdateMeInput = z.object({
   name: z.string().trim().min(1).max(120).nullable().optional(),
-  primaryCurrencyCode: z.string().min(3).max(3).nullable().optional(),
+  // ISO 4217 — three uppercase letters. The regex was previously only on the
+  // API DTO; folded into core so web/mobile forms validate identically.
+  primaryCurrencyCode: z
+    .string()
+    .length(3)
+    .regex(/^[A-Z]{3}$/)
+    .nullable()
+    .optional(),
 });
 export type UpdateMeInputType = z.infer<typeof UpdateMeInput>;
 
@@ -48,7 +55,7 @@ export type UpdateMeInputType = z.infer<typeof UpdateMeInput>;
 // ─────────────────────────────────────────────────────────────
 
 export const ChangeEmailRequestInput = z.object({
-  newEmail: z.string().email(),
+  newEmail: z.string().email().max(254),
 });
 export type ChangeEmailRequestInputType = z.infer<typeof ChangeEmailRequestInput>;
 
@@ -127,7 +134,7 @@ export type VerifyPinInputType = z.infer<typeof VerifyPinInput>;
 export const VerifyPinResponseSchema = z.object({ ok: z.boolean() });
 
 export const VerifyOtpForSecurityInput = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
   otp: z.string().regex(/^\d{6}$/),
 });
 export type VerifyOtpForSecurityInputType = z.infer<

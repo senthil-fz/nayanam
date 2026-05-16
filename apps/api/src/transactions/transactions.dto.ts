@@ -1,41 +1,42 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import {
+  TransactionTypeEnum as CoreTransactionTypeEnum,
+  CreateTransactionTypeEnum as CoreCreateTransactionTypeEnum,
+  CreateTransactionInput,
+  UpdateTransactionInput,
+  HomePeriodEnum,
+  type Transaction,
+} from '@nayanam/core/transactions/schemas';
 
-export const TransactionTypeEnum = z.enum(['INCOME', 'EXPENSE', 'TRANSFER']);
-export const CreateTransactionTypeEnum = z.enum(['INCOME', 'EXPENSE']);
+/**
+ * Transactions DTOs. Body schemas derive from the shared `@nayanam/core`
+ * schemas (B4). Query schemas stay local — Express string-coercion variants.
+ */
 
-const PositiveMinorSchema = z
-  .string()
-  .regex(/^[1-9]\d*$/, 'Amount must be a positive integer string in minor units.');
+export const TransactionTypeEnum = CoreTransactionTypeEnum;
+export const CreateTransactionTypeEnum = CoreCreateTransactionTypeEnum;
 
-const CurrencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
-const NoteSchema = z.string().max(500).nullable();
-
-export const CreateTransactionSchema = z.object({
-  accountId: z.string().min(1),
-  categoryId: z.string().min(1),
-  // Accept TRANSFER here so service emits VALIDATION_ERROR with a useful message.
-  type: TransactionTypeEnum,
-  amountMinor: PositiveMinorSchema,
-  currencyCode: CurrencyCodeSchema,
-  occurredAt: z.string().datetime().optional(),
-  note: NoteSchema.optional(),
+/**
+ * Create body. The shared `CreateTransactionInput` restricts `type` to
+ * INCOME|EXPENSE; the API widens it to also accept TRANSFER so the service
+ * can emit a useful VALIDATION_ERROR message. Server-only widening — local
+ * `.extend`, not pushed into core.
+ */
+export const CreateTransactionSchema = CreateTransactionInput.extend({
+  type: CoreTransactionTypeEnum,
 });
 export class CreateTransactionDto extends createZodDto(CreateTransactionSchema) {}
 
-export const UpdateTransactionSchema = z
-  .object({
-    accountId: z.string().min(1).optional(),
-    categoryId: z.string().min(1).optional(),
-    amountMinor: PositiveMinorSchema.optional(),
-    occurredAt: z.string().datetime().optional(),
-    note: NoteSchema.optional(),
-    // Any of these trigger VALIDATION_ERROR at service layer.
-    type: z.string().optional(),
-    currencyCode: z.string().optional(),
-    transferId: z.string().optional(),
-  })
-  .strict();
+/**
+ * PATCH body. `type`, `currencyCode`, `transferId` are accepted-but-rejected
+ * (service emits VALIDATION_ERROR). Server-only stubs — local `.extend`.
+ */
+export const UpdateTransactionSchema = UpdateTransactionInput.extend({
+  type: z.string().optional(),
+  currencyCode: z.string().optional(),
+  transferId: z.string().optional(),
+}).strict();
 export class UpdateTransactionDto extends createZodDto(UpdateTransactionSchema) {}
 
 export const BulkCreateTransactionsSchema = z.object({
@@ -43,7 +44,7 @@ export const BulkCreateTransactionsSchema = z.object({
 });
 export class BulkCreateTransactionsDto extends createZodDto(BulkCreateTransactionsSchema) {}
 
-export const PeriodEnum = z.enum(['day', 'week', 'month', 'year']);
+export const PeriodEnum = HomePeriodEnum;
 
 /**
  * `period` and `from`/`to` are mutually exclusive; if both land the service
@@ -52,7 +53,7 @@ export const PeriodEnum = z.enum(['day', 'week', 'month', 'year']);
  */
 export const PeriodSummaryQuerySchema = z
   .object({
-    period: PeriodEnum.optional(),
+    period: HomePeriodEnum.optional(),
     from: z.string().datetime().optional(),
     to: z.string().datetime().optional(),
   })
@@ -64,7 +65,7 @@ export const ListTransactionsQuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).optional(),
     accountId: z.union([z.array(z.string()), z.string()]).optional(),
     categoryId: z.union([z.array(z.string()), z.string()]).optional(),
-    type: TransactionTypeEnum.optional(),
+    type: CoreTransactionTypeEnum.optional(),
     from: z.string().datetime().optional(),
     to: z.string().datetime().optional(),
     q: z.string().trim().min(1).max(100).optional(),
@@ -76,18 +77,5 @@ export const ListTransactionsQuerySchema = z
   })
   .passthrough();
 
-export type TransactionDTO = {
-  id: string;
-  householdId: string;
-  accountId: string;
-  categoryId: string;
-  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
-  amountMinor: string;
-  currencyCode: string;
-  occurredAt: string;
-  note: string | null;
-  transferId: string | null;
-  deletedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+/** Wire shape for a transaction row — the shared `Transaction` type from core. */
+export type TransactionDTO = Transaction;

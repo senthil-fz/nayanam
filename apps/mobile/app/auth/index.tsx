@@ -26,6 +26,7 @@ export default function EmailScreen() {
 
         <Text className="mb-2 text-sm text-text-dim">Email</Text>
         <TextInput
+          testID="auth-email-input"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -43,6 +44,7 @@ export default function EmailScreen() {
         )}
 
         <Pressable
+          testID="auth-email-submit"
           disabled={request.isPending || !email}
           onPress={() =>
             request.mutate(email, {

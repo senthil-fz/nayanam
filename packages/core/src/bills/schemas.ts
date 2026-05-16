@@ -9,6 +9,12 @@ const MinorAmountString = z
   .string()
   .regex(/^\d+$/, 'must be a non-negative integer as a string');
 
+// A bill's amount must be strictly positive — the API rejected `0` already;
+// folded into core so web/mobile forms reject it identically.
+const PositiveMinorAmountString = z
+  .string()
+  .regex(/^[1-9]\d*$/, 'must be a positive integer as a string');
+
 export const BillCycleEnum = z.enum([
   'WEEKLY',
   'MONTHLY',
@@ -66,9 +72,13 @@ export type BillPayment = z.infer<typeof BillPaymentSchema>;
 
 // `currencyCode` is NOT accepted on create — the server derives it from the
 // target account. See contract CreateBillInput description.
+// `autoLog` is required to match the generated contract type
+// (`ApiSchemas['CreateBillInput']`) — openapi-typescript treats a property
+// with a `default` as always-present. Name is trimmed and token strings are
+// bounded (1..40); both were API-DTO-only and are folded into core for parity.
 export const CreateBillInput = z.object({
-  name: z.string().min(1).max(80),
-  amountMinor: MinorAmountString,
+  name: z.string().trim().min(1).max(80),
+  amountMinor: PositiveMinorAmountString,
   accountId: z.string().min(1),
   categoryId: z.string().min(1),
   cycle: BillCycleEnum,
@@ -76,16 +86,16 @@ export const CreateBillInput = z.object({
   startAt: z.string().datetime().optional(),
   autoLog: z.boolean(),
   note: z.string().max(500).nullable().optional(),
-  colorToken: z.string().nullable().optional(),
-  iconToken: z.string().nullable().optional(),
+  colorToken: z.string().max(40).nullable().optional(),
+  iconToken: z.string().max(40).nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
 });
 export type CreateBillInputType = z.infer<typeof CreateBillInput>;
 
 // PATCH — all fields optional; `currencyCode` is immutable and not accepted.
 export const UpdateBillInput = z.object({
-  name: z.string().min(1).max(80).optional(),
-  amountMinor: MinorAmountString.optional(),
+  name: z.string().trim().min(1).max(80).optional(),
+  amountMinor: PositiveMinorAmountString.optional(),
   accountId: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
   cycle: BillCycleEnum.optional(),
@@ -93,14 +103,14 @@ export const UpdateBillInput = z.object({
   startAt: z.string().datetime().optional(),
   autoLog: z.boolean().optional(),
   note: z.string().max(500).nullable().optional(),
-  colorToken: z.string().nullable().optional(),
-  iconToken: z.string().nullable().optional(),
+  colorToken: z.string().max(40).nullable().optional(),
+  iconToken: z.string().max(40).nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
 });
 export type UpdateBillInputType = z.infer<typeof UpdateBillInput>;
 
 export const MarkBillPaidInput = z.object({
-  amountMinor: MinorAmountString.optional(),
+  amountMinor: PositiveMinorAmountString.optional(),
   occurredAt: z.string().datetime().optional(),
   note: z.string().max(500).nullable().optional(),
   source: BillPaymentSourceEnum.optional(),
@@ -113,7 +123,8 @@ export const ReorderBillsEntry = z.object({
 });
 
 export const ReorderBillsInput = z.object({
-  order: z.array(ReorderBillsEntry),
+  // 1..500 bound — was API-DTO-only; folded into core for parity.
+  order: z.array(ReorderBillsEntry).min(1).max(500),
 });
 export type ReorderBillsInputType = z.infer<typeof ReorderBillsInput>;
 

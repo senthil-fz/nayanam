@@ -2,8 +2,11 @@
 // The `generated.ts` file is the output of `openapi-typescript openapi.yaml -o src/generated.ts`.
 // The hand-authored stand-in in this repo mirrors that shape.
 
-export type { components, paths, operations } from './generated';
-import type { components } from './generated';
+// Explicit `.js` extension: required by the API's `nodenext` tsc resolution
+// (TS maps `./generated.js` → `./generated.ts`); also valid under the
+// web/mobile `bundler` resolution. See B4.
+export type { components, paths, operations } from './generated.js';
+import type { components } from './generated.js';
 
 // Convenience aliases — most code reads these.
 export type ApiSchemas = components['schemas'];

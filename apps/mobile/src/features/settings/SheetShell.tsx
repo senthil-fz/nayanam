@@ -112,6 +112,7 @@ export function PrimaryButton({
   loading,
   destructive,
   accent,
+  testID,
 }: {
   label: string;
   onPress: () => void;
@@ -119,6 +120,7 @@ export function PrimaryButton({
   loading?: boolean;
   destructive?: boolean;
   accent?: string;
+  testID?: string;
 }) {
   const bg = destructive ? LIGHT.negative : accent ?? LIGHT.text;
   return (
@@ -130,6 +132,7 @@ export function PrimaryButton({
       }}
     >
       <Text
+        testID={testID}
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ disabled: Boolean(disabled || loading) }}

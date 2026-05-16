@@ -1,34 +1,24 @@
-import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import {
+  HouseholdCreateInput,
+  HouseholdUpdateInput,
+  MemberRoleUpdateInput,
+  InviteCreateInput,
+  InviteAcceptInput,
+} from '@nayanam/core/households/schemas';
 
-const Role = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
+/**
+ * Households DTOs. Every request body is a shared `@nayanam/core` schema (B4).
+ * `HouseholdCreateInput` / `InviteCreateInput` are the canonical schemas from
+ * `@nayanam/core/schemas` re-exported through the households domain module.
+ */
 
-export const HouseholdCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  defaultCurrencyCode: z.string().length(3).optional(),
-});
-export class HouseholdCreateDto extends createZodDto(HouseholdCreateSchema) {}
+export class HouseholdCreateDto extends createZodDto(HouseholdCreateInput) {}
 
-export const HouseholdUpdateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  defaultCurrencyCode: z.string().length(3).optional(),
-  iconToken: z.string().max(64).nullish(),
-  colorToken: z.string().max(64).nullish(),
-});
-export class HouseholdUpdateDto extends createZodDto(HouseholdUpdateSchema) {}
+export class HouseholdUpdateDto extends createZodDto(HouseholdUpdateInput) {}
 
-export const MemberRoleUpdateSchema = z.object({
-  role: Role,
-});
-export class MemberRoleUpdateDto extends createZodDto(MemberRoleUpdateSchema) {}
+export class MemberRoleUpdateDto extends createZodDto(MemberRoleUpdateInput) {}
 
-export const InviteCreateSchema = z.object({
-  email: z.string().email(),
-  role: Role,
-});
-export class InviteCreateDto extends createZodDto(InviteCreateSchema) {}
+export class InviteCreateDto extends createZodDto(InviteCreateInput) {}
 
-export const InviteAcceptSchema = z.object({
-  token: z.string().min(10),
-});
-export class InviteAcceptDto extends createZodDto(InviteAcceptSchema) {}
+export class InviteAcceptDto extends createZodDto(InviteAcceptInput) {}

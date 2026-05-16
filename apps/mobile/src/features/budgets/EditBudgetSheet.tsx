@@ -33,6 +33,7 @@ import type {
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useUpdateBudget } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import {
   BudgetFormFields,
   type BudgetFormValues,
@@ -125,7 +126,7 @@ export const EditBudgetSheet = forwardRef<EditBudgetSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Update budget failed', err);
+        logWarn('Update budget failed', err);
       }
     });
 
@@ -173,6 +174,7 @@ export const EditBudgetSheet = forwardRef<EditBudgetSheetHandle>(
             />
 
             <Pressable
+              testID="edit-budget-submit"
               accessibilityRole="button"
               accessibilityLabel="Save budget"
               disabled={updateMut.isPending}

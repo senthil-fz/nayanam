@@ -1,36 +1,32 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import {
+  BudgetScopeEnum as CoreBudgetScopeEnum,
+  BudgetPeriodEnum as CoreBudgetPeriodEnum,
+  BudgetStatusEnum as CoreBudgetStatusEnum,
+  CreateBudgetInputBase,
+  UpdateBudgetInput,
+  ReorderBudgetsInput,
+  type Budget,
+} from '@nayanam/core/budgets/schemas';
 
-/** Mirrors `packages/core/src/budgets/schemas.ts`. Kept here for class-based DI. */
+/**
+ * Budgets DTOs. Body schemas derive from the shared `@nayanam/core` schemas
+ * (B4). Query schemas stay local — Express string-coercion variants.
+ */
 
-export const BudgetScopeEnum = z.enum(['HOUSEHOLD', 'CATEGORY']);
-export const BudgetPeriodEnum = z.enum(['WEEKLY', 'MONTHLY']);
-export const BudgetStatusEnum = z.enum(['ACTIVE', 'PAUSED']);
+export const BudgetScopeEnum = CoreBudgetScopeEnum;
+export const BudgetPeriodEnum = CoreBudgetPeriodEnum;
+export const BudgetStatusEnum = CoreBudgetStatusEnum;
 
-const PositiveMinorSchema = z
-  .string()
-  .regex(/^[1-9]\d*$/, 'Amount must be a positive integer string in minor units.');
-const NameSchema = z.string().trim().min(1).max(60);
-const CurrencyCodeSchema = z
-  .string()
-  .trim()
-  .length(3)
-  .regex(/^[A-Z]{3}$/, 'currencyCode must be an uppercase ISO 4217 code.');
-
-export const CreateBudgetSchema = z
-  .object({
-    name: NameSchema,
-    scope: BudgetScopeEnum,
-    categoryId: z.string().min(1).nullable().optional(),
-    amountMinor: PositiveMinorSchema,
-    currencyCode: CurrencyCodeSchema,
-    period: BudgetPeriodEnum,
-    rollover: z.boolean().optional(),
-    startAt: z.string().datetime().optional(),
-    endAt: z.string().datetime().nullable().optional(),
-    displayOrder: z.number().int().min(0).optional(),
-  })
-  .strict();
+/**
+ * Create body. The shared `CreateBudgetInputBase` is the un-refined field
+ * shape: the budgets service re-checks the scope/category coupling itself so
+ * it can throw the stable BUDGET_CATEGORY_REQUIRED / BUDGET_CATEGORY_FORBIDDEN
+ * codes — adopting the `.superRefine`d `CreateBudgetInput` would collapse those
+ * to a generic VALIDATION_ERROR. Web/mobile forms use the refined variant.
+ */
+export const CreateBudgetSchema = CreateBudgetInputBase.strict();
 export class CreateBudgetDto extends createZodDto(CreateBudgetSchema) {}
 
 /**
@@ -38,41 +34,32 @@ export class CreateBudgetDto extends createZodDto(CreateBudgetSchema) {}
  * immutable fields too so the service layer can reject them with the correct
  * error code (BUDGET_SCOPE_IMMUTABLE / BUDGET_CURRENCY_IMMUTABLE /
  * BUDGET_PERIOD_IMMUTABLE). A strict Zod rejection would collapse them under a
- * generic VALIDATION_ERROR and lose the stable machine code.
+ * generic VALIDATION_ERROR and lose the stable machine code. Those server-only
+ * accept-and-reject stubs are added via a local `.extend`, not pushed to core.
  */
-export const UpdateBudgetSchema = z
-  .object({
-    name: NameSchema.optional(),
-    amountMinor: PositiveMinorSchema.optional(),
-    rollover: z.boolean().optional(),
-    endAt: z.string().datetime().nullable().optional(),
-    displayOrder: z.number().int().min(0).optional(),
-    // Reject in service with the specific *_IMMUTABLE code.
-    scope: z.string().optional(),
-    categoryId: z.string().nullable().optional(),
-    currencyCode: z.string().optional(),
-    period: z.string().optional(),
-    startAt: z.string().optional(),
-    status: z.string().optional(),
-  })
-  .strict();
+export const UpdateBudgetSchema = UpdateBudgetInput.extend({
+  scope: z.string().optional(),
+  categoryId: z.string().nullable().optional(),
+  currencyCode: z.string().optional(),
+  period: z.string().optional(),
+  startAt: z.string().optional(),
+  status: z.string().optional(),
+}).strict();
 export class UpdateBudgetDto extends createZodDto(UpdateBudgetSchema) {}
 
 export const ReorderBudgetsEntrySchema = z.object({
   id: z.string().min(1),
   displayOrder: z.number().int().min(0),
 });
-export const ReorderBudgetsSchema = z
-  .object({ order: z.array(ReorderBudgetsEntrySchema).min(1).max(500) })
-  .strict();
+export const ReorderBudgetsSchema = ReorderBudgetsInput.strict();
 export class ReorderBudgetsDto extends createZodDto(ReorderBudgetsSchema) {}
 
 export const ListBudgetsQuerySchema = z
   .object({
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
-    scope: BudgetScopeEnum.optional(),
-    status: BudgetStatusEnum.optional(),
+    scope: CoreBudgetScopeEnum.optional(),
+    status: CoreBudgetStatusEnum.optional(),
     includeArchived: z
       .union([z.boolean(), z.string()])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
@@ -82,7 +69,7 @@ export const ListBudgetsQuerySchema = z
 
 export const BudgetsStatusQuerySchema = z
   .object({
-    scope: BudgetScopeEnum.optional(),
+    scope: CoreBudgetScopeEnum.optional(),
     includeArchived: z
       .union([z.boolean(), z.string()])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
@@ -97,24 +84,8 @@ export const BudgetHistoryQuerySchema = z
   })
   .passthrough();
 
-export type BudgetDTO = {
-  id: string;
-  householdId: string;
-  name: string;
-  scope: 'HOUSEHOLD' | 'CATEGORY';
-  categoryId: string | null;
-  amountMinor: string;
-  currencyCode: string;
-  period: 'WEEKLY' | 'MONTHLY';
-  rollover: boolean;
-  status: 'ACTIVE' | 'PAUSED';
-  startAt: string;
-  endAt: string | null;
-  displayOrder: number;
-  archivedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+/** Wire shape for a budget row — the shared `Budget` type from core. */
+export type BudgetDTO = Budget;
 
 export type BudgetStatusItemDTO = {
   budget: BudgetDTO;

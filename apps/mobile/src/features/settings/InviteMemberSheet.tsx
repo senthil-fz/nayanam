@@ -184,6 +184,7 @@ export const InviteMemberSheet = forwardRef<
             onPress={() => inner.current?.dismiss()}
           />
           <PrimaryButton
+            testID="invite-member-submit"
             label="Send invite"
             onPress={() => void onSubmit()}
             loading={create.isPending}

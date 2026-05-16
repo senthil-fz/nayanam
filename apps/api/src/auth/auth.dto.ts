@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
 export const OtpRequestSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
 });
 export class OtpRequestDto extends createZodDto(OtpRequestSchema) {}
 
 export const OtpVerifySchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
   code: z.string().length(6).regex(/^\d{6}$/),
 });
 export class OtpVerifyDto extends createZodDto(OtpVerifySchema) {}
@@ -18,7 +18,7 @@ export const RefreshSchema = z.object({
 export class RefreshDto extends createZodDto(RefreshSchema) {}
 
 export const OtpVerifyForSecuritySchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
   otp: z.string().length(6).regex(/^\d{6}$/),
 });
 export class OtpVerifyForSecurityDto extends createZodDto(OtpVerifyForSecuritySchema) {}

@@ -24,6 +24,12 @@ const BigIntString = z
   .string()
   .regex(/^\d+$/, 'must be a non-negative integer as a string');
 
+// An upload's declared size must be strictly positive — a 0-byte attachment
+// makes no sense. The API DTO already enforced this; folded into core.
+const PositiveBigIntString = z
+  .string()
+  .regex(/^[1-9][0-9]*$/, 'must be a positive integer as a string');
+
 export const AttachmentSchema = z.object({
   id: z.string().min(1),
   householdId: z.string().min(1),
@@ -53,7 +59,7 @@ export const PresignUploadInput = z.object({
   ownerId: z.string().min(1),
   filename: z.string().min(1).max(255),
   mime: AttachmentMimeEnum,
-  size: BigIntString,
+  size: PositiveBigIntString,
 });
 export type PresignUploadInputType = z.infer<typeof PresignUploadInput>;
 

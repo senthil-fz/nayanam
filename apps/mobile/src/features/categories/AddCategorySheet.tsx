@@ -40,6 +40,7 @@ import {
 } from '@nayanam/ui-tokens';
 import { useCreateCategory } from '../../lib/hooks';
 import { hapticError, hapticSelection, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { CategoryChip } from './CategoryChip';
 
 export type AddCategorySheetHandle = {
@@ -101,7 +102,7 @@ export const AddCategorySheet = forwardRef<AddCategorySheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Create category failed', err);
+        logWarn('Create category failed', err);
       }
     });
 

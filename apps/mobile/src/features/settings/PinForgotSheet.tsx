@@ -149,6 +149,7 @@ export const PinForgotSheet = forwardRef<PinForgotSheetHandle, object>(
                 onPress={() => inner.current?.dismiss()}
               />
               <PrimaryButton
+                testID="pin-forgot-send-code"
                 label="Send code"
                 onPress={() => void onRequest()}
                 loading={request.isPending}
@@ -193,6 +194,7 @@ export const PinForgotSheet = forwardRef<PinForgotSheetHandle, object>(
                 onPress={() => setStage('request')}
               />
               <PrimaryButton
+                testID="pin-forgot-verify"
                 label="Verify"
                 onPress={() => void onVerify()}
                 loading={verify.isPending}

@@ -26,6 +26,7 @@ import type { Account, Bill, Category } from '@nayanam/core';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useUpdateBill } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { BillFormFields, type BillFormValues } from './BillFormFields';
 
 export type EditBillSheetHandle = {
@@ -139,7 +140,7 @@ export const EditBillSheet = forwardRef<EditBillSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Update bill failed', err);
+        logWarn('Update bill failed', err);
       }
     });
 
@@ -187,6 +188,7 @@ export const EditBillSheet = forwardRef<EditBillSheetHandle>(
             />
 
             <Pressable
+              testID="edit-bill-submit"
               accessibilityRole="button"
               accessibilityLabel="Save bill changes"
               disabled={updateMut.isPending}

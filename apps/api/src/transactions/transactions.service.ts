@@ -10,6 +10,7 @@ import { getAuthOrThrow, getContext, getHouseholdOrThrow } from '../common/conte
 import { roleAtLeast, type HouseholdRole } from '../common/household-header.guard';
 import type { TransactionDTO } from './transactions.dto';
 import { EventType } from '../common/event-types';
+import { resolveStatsPeriod } from '../common/period';
 
 const WRITE_ROLE = 'MEMBER' as const;
 
@@ -134,11 +135,115 @@ export class TransactionsService {
   async bulkCreate(items: CreateInput[]): Promise<{ items: TransactionDTO[] }> {
     this.assertRole(WRITE_ROLE);
     const householdId = getHouseholdOrThrow();
+    const { userId } = getAuthOrThrow();
+
+    if (items.length === 0) return { items: [] };
+
+    // --- Batch validation: one IN query per entity type, not one per item ---
+
+    const distinctAccountIds = [...new Set(items.map((it) => it.accountId))];
+    const distinctCategoryIds = [...new Set(items.map((it) => it.categoryId))];
+
+    // Pre-load accounts and categories outside the transaction (read-only; we
+    // re-lock accounts inside the transaction via applyDelta's FOR UPDATE).
+    const [accountRows, categoryRows] = await Promise.all([
+      this.prisma.account.findMany({
+        where: {
+          id: { in: distinctAccountIds },
+          householdId,
+          deletedAt: null,
+        },
+      }),
+      this.prisma.category.findMany({
+        where: {
+          id: { in: distinctCategoryIds },
+          deletedAt: null,
+          OR: [{ householdId: null }, { householdId }],
+        },
+      }),
+    ]);
+
+    const accountMap = new Map(accountRows.map((a) => [a.id, a]));
+    const categoryMap = new Map(categoryRows.map((c) => [c.id, c]));
+
+    // Validate every item against the fetched maps — fail fast before the
+    // transaction opens so we avoid a partial rollback on validation errors.
+    for (const it of items) {
+      if (it.type === 'TRANSFER') {
+        throw Errors.validation('Use POST /transfers to create a transfer.', {
+          field: 'type',
+          expected: 'INCOME | EXPENSE',
+        });
+      }
+      const currencyCode = it.currencyCode.toUpperCase();
+      const account = accountMap.get(it.accountId);
+      if (!account) throw Errors.notFound();
+      if (account.archivedAt) throw Errors.accountArchived();
+      if (account.currencyCode !== currencyCode) {
+        throw Errors.transactionCurrencyMismatch(account.currencyCode, currencyCode);
+      }
+      const category = categoryMap.get(it.categoryId);
+      if (!category) {
+        throw Errors.validation('Category not found.', { field: 'categoryId', reason: 'missing' });
+      }
+      if (category.archivedAt) {
+        throw Errors.validation('Category is archived.', { field: 'categoryId', reason: 'archived' });
+      }
+      if (category.type !== it.type) {
+        throw Errors.validation('Category type does not match transaction type.', {
+          field: 'categoryId',
+          expected: it.type,
+        });
+      }
+    }
+
+    // --- All items validated. Open one transaction for all creates + balance updates ---
+
     const { created, pushes } = await this.prisma.$transaction(async (tx) => {
       const out: TransactionRow[] = [];
       for (const it of items) {
-        out.push(await this.createWithin(tx, it));
+        const currencyCode = it.currencyCode.toUpperCase();
+        const amount = BigInt(it.amountMinor);
+        const occurredAt = it.occurredAt ? new Date(it.occurredAt) : new Date();
+        const id = newId();
+
+        const row = await tx.transaction.create({
+          data: {
+            id,
+            householdId,
+            accountId: it.accountId,
+            categoryId: it.categoryId,
+            type: it.type,
+            amountMinor: amount,
+            currencyCode,
+            occurredAt,
+            note: normalizeNote(it.note),
+            transferId: null,
+            createdBy: userId,
+            updatedBy: userId,
+          },
+        });
+
+        // applyDelta acquires FOR UPDATE on the account row and handles the
+        // pre-opening skip — one call per item is required because each has its
+        // own occurredAt.
+        const signed = it.type === 'INCOME' ? amount : -amount;
+        await this.balance.applyDelta(tx, it.accountId, signed, occurredAt);
+
+        await recordEvent(tx, householdId, userId, EventType.TRANSACTION_CREATED, {
+          transactionId: row.id,
+          accountId: row.accountId,
+          categoryId: row.categoryId,
+          type: row.type,
+          amountMinor: row.amountMinor.toString(),
+          currencyCode: row.currencyCode,
+          occurredAt: row.occurredAt.toISOString(),
+          transferId: null,
+        });
+
+        out.push(row);
       }
+
       const cats = out.map((r) => r.categoryId);
       const currencies = out.map((r) => r.currencyCode);
       const p = await this.budgets.evaluateForTransactionMutation(
@@ -149,6 +254,7 @@ export class TransactionsService {
       );
       return { created: out, pushes: p };
     });
+
     await this.budgets.flushPushQueue(pushes);
     return { items: created.map(toDTO) };
   }
@@ -280,7 +386,6 @@ export class TransactionsService {
       const newOccurredAt = patch.occurredAt ? new Date(patch.occurredAt) : existing.occurredAt;
 
       // Account change validation
-      let newAccount = null as null | { id: string; currencyCode: string; archivedAt: Date | null };
       if (patch.accountId && patch.accountId !== existing.accountId) {
         const acct = await tx.account.findFirst({
           where: { id: patch.accountId, householdId, deletedAt: null },
@@ -290,7 +395,6 @@ export class TransactionsService {
         if (acct.currencyCode !== existing.currencyCode) {
           throw Errors.transactionCurrencyMismatch(existing.currencyCode, acct.currencyCode);
         }
-        newAccount = acct;
       }
 
       // Category change validation
@@ -388,7 +492,6 @@ export class TransactionsService {
           after,
         });
       }
-      void newAccount;
       const p = await this.budgets.evaluateForTransactionMutation(
         tx,
         householdId,
@@ -543,8 +646,17 @@ export class TransactionsService {
     } else {
       const now = new Date();
       const period = q.period ?? 'month';
-      from = startOfPeriodUTC(now, period);
-      to = now;
+      if (period === 'day') {
+        // 'day' is not a StatsPeriodKind; compute manually.
+        from = startOfPeriodUTC(now, 'day');
+        to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+      } else {
+        // week / month / year — delegate to resolveStatsPeriod for aligned
+        // [from, to) boundaries that match the Stats endpoints exactly.
+        const resolved = resolveStatsPeriod(period, now);
+        from = resolved.from;
+        to = resolved.to;
+      }
     }
 
     type Row = {

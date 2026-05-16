@@ -19,6 +19,7 @@ export default function OtpScreen() {
           <Text className="font-semibold text-text"> {email}</Text>
         </Text>
         <TextInput
+          testID="auth-otp-input"
           value={code}
           onChangeText={(v) => setCode(v.replace(/\D/g, ''))}
           autoFocus
@@ -36,6 +37,7 @@ export default function OtpScreen() {
         )}
 
         <Pressable
+          testID="auth-otp-submit"
           disabled={verify.isPending || code.length !== 6}
           onPress={() =>
             verify.mutate(

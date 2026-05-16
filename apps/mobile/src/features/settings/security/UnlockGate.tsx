@@ -113,12 +113,22 @@ export function UnlockGate({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshToken]);
 
-  // When live /me/security data arrives: write to cache, commit init, update lock.
+  // Always keep the SecureStore offline cache fresh whenever live data arrives
+  // (no didInitRef guard — this must run on every change so a mid-session
+  // enable/disable of PIN or biometric is reflected on the next cold start).
+  useEffect(() => {
+    if (!security.data) return;
+    void writeCachedFlags(security.data.biometricEnabled, security.data.pinSet);
+  }, [security.data]);
+
+  // One-time init: when live /me/security data first arrives, commit the
+  // definitive locked state. The didInitRef guard ensures this runs exactly
+  // once per session — subsequent data changes (e.g. mid-session toggle) must
+  // NOT re-run setLocked here or they would re-lock an already-unlocked user.
   useEffect(() => {
     if (!security.data) return;
     if (didInitRef.current) return;
     didInitRef.current = true;
-    void writeCachedFlags(security.data.biometricEnabled, security.data.pinSet);
     const liveGateActive =
       security.data.biometricEnabled || security.data.pinSet;
     if (!refreshToken || !liveGateActive) {

@@ -32,6 +32,7 @@ import {
   useResumeBill,
 } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { BillsHeader } from './BillsHeader';
 import { BillsTotalsCard } from './BillsTotalsCard';
 import { UpcomingTimeline } from './UpcomingTimeline';
@@ -182,7 +183,7 @@ export function BillsScreen() {
         hapticSuccess();
       } catch (err) {
         hapticError();
-        console.warn('Pause/resume failed', err);
+        logWarn('Pause/resume failed', err);
       }
     },
     [pauseMut, resumeMut],
@@ -195,7 +196,7 @@ export function BillsScreen() {
         hapticSuccess();
       } catch (err) {
         hapticError();
-        console.warn('Archive failed', err);
+        logWarn('Archive failed', err);
       }
     },
     [archiveMut],

@@ -30,6 +30,7 @@ import { formatMoney } from '@nayanam/core';
 import { ACCENTS, LIGHT } from '@nayanam/ui-tokens';
 import { useMarkBillPaid } from '../../lib/hooks';
 import { hapticError, hapticSuccess } from '../../lib/haptics';
+import { logWarn } from '../../lib/log';
 import { DateTimeField } from '../../components/DateTimeField';
 import { MinorAmountInput } from '../transactions/MinorAmountInput';
 import { Field, nowIso } from './BillFormFields';
@@ -112,7 +113,7 @@ export const MarkPaidSheet = forwardRef<MarkPaidSheetHandle>(
         sheetRef.current?.dismiss();
       } catch (err) {
         hapticError();
-        console.warn('Mark paid failed', err);
+        logWarn('Mark paid failed', err);
       }
     });
 
@@ -249,6 +250,7 @@ export const MarkPaidSheet = forwardRef<MarkPaidSheetHandle>(
             ) : null}
 
             <Pressable
+              testID="mark-paid-submit"
               accessibilityRole="button"
               accessibilityLabel="Mark paid"
               disabled={pending}

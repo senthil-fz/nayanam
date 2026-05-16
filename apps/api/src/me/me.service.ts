@@ -132,8 +132,10 @@ export class MeService {
     const row = await this.prisma.attachment.findFirst({ where: { id: attachmentId } });
     if (!row) return null;
     const key = row.thumbKey ?? row.key;
+    // Thumbnails are stored as image/webp; originals use row.mime.
+    const mime = row.thumbKey ? 'image/webp' : row.mime;
     try {
-      return await this.storage.presignGet(key, AVATAR_URL_TTL_SEC);
+      return await this.storage.presignGet(key, mime, AVATAR_URL_TTL_SEC);
     } catch {
       return null;
     }

@@ -2,6 +2,7 @@
 // archive/undo flow. Replace with a real toast lib when the design system lands.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { setShowToast } from '../lib/toast';
 
 type ToastAction = { label: string; onClick: () => void };
 type ToastPayload = { id: number; message: string; action?: ToastAction; tone?: 'default' | 'negative' };
@@ -30,6 +31,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToast({ id, message, action: opts?.action, tone: opts?.tone ?? 'default' });
     timerRef.current = window.setTimeout(() => setToast(null), opts?.durationMs ?? 5000);
   }, []);
+
+  // Expose the show function via the imperative singleton so QueryCache
+  // error handlers (created outside React) can trigger toasts.
+  useEffect(() => {
+    setShowToast(show);
+  }, [show]);
 
   useEffect(() => () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);

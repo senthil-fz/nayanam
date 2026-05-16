@@ -65,6 +65,7 @@ import {
   type BudgetDetailSheetHandle,
 } from './BudgetDetailSheet';
 import { BudgetsSuggestionsRow } from './BudgetsSuggestionsRow';
+import { logWarn } from '../../lib/log';
 import { BudgetRow } from './BudgetRow';
 
 export function BudgetsScreen() {
@@ -173,7 +174,7 @@ export function BudgetsScreen() {
         hapticSuccess();
       } catch (err) {
         hapticError();
-        console.warn('Reorder failed', err);
+        logWarn('Reorder failed', err);
       } finally {
         setDragOrder(null);
       }
