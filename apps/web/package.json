@@ -41,7 +41,7 @@
     "jsdom": "^26.1.0",
     "tailwindcss": "^4.2.4",
     "typescript": "catalog:",
-    "vite": "^8.0.10",
+    "vite": "^8.0.16",
     "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:",
     "@vitest/coverage-v8": "catalog:"
