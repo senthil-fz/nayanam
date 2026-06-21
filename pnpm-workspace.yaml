@@ -14,7 +14,7 @@ catalog:
   react-dom: ^19.2.6
   typescript: ^6.0.3
   vite-tsconfig-paths: ^5.1.4
-  vitest: ^3.2.4
+  vitest: ^3.2.6
   zod: ^4.4.3
   zustand: ^5.0.12
 
